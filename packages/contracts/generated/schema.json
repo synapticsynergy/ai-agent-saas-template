@@ -1,0 +1,1542 @@
+{
+  "$defs": {
+    "AgentRunRead": {
+      "properties": {
+        "agent_name": {
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "estimated_cost": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Cost"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "organization_id": {
+          "title": "Organization Id",
+          "type": "string"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "tool_calls": {
+          "items": {
+            "$ref": "#/$defs/AgentToolCallRead"
+          },
+          "title": "Tool Calls",
+          "type": "array"
+        },
+        "trace_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trace Id"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organization_id",
+        "user_id",
+        "agent_name",
+        "model",
+        "status",
+        "started_at"
+      ],
+      "title": "AgentRunRead",
+      "type": "object"
+    },
+    "AgentToolCallRead": {
+      "properties": {
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "tool_name",
+        "status",
+        "started_at"
+      ],
+      "title": "AgentToolCallRead",
+      "type": "object"
+    },
+    "BuildRouteInput": {
+      "properties": {
+        "mode": {
+          "default": "walk",
+          "enum": [
+            "walk",
+            "transit",
+            "drive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "names": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Names",
+          "type": "array"
+        },
+        "stops": {
+          "items": {
+            "$ref": "#/$defs/GeoPoint"
+          },
+          "maxItems": 20,
+          "minItems": 2,
+          "title": "Stops",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stops"
+      ],
+      "title": "BuildRouteInput",
+      "type": "object"
+    },
+    "Event": {
+      "properties": {
+        "end_time": {
+          "format": "date-time",
+          "title": "End Time",
+          "type": "string"
+        },
+        "genre": {
+          "default": "",
+          "title": "Genre",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "start_time": {
+          "format": "date-time",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "ticket_price": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Ticket Price",
+          "type": "number"
+        },
+        "ticketed": {
+          "default": false,
+          "title": "Ticketed",
+          "type": "boolean"
+        },
+        "venue_name": {
+          "default": "",
+          "title": "Venue Name",
+          "type": "string"
+        },
+        "venue_place_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Venue Place Id"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "latitude",
+        "longitude",
+        "start_time",
+        "end_time"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "GeoPoint": {
+      "properties": {
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ],
+      "title": "GeoPoint",
+      "type": "object"
+    },
+    "Itinerary": {
+      "description": "The agent's working itinerary \u2014 shared UI/agent state.\n\nDistinct from ``PlanRead``: an itinerary exists only in the running agent\nsession and has no id or tenant until the user saves it. Modelling the\nin-progress plan separately keeps \"draft the agent is editing\" and \"record\nthe database owns\" from blurring together.",
+      "properties": {
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "estimated_cost": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Cost",
+          "type": "number"
+        },
+        "estimated_walk_distance_km": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Walk Distance Km",
+          "type": "number"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": -90,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "maximum": 180,
+              "minimum": -180,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longitude"
+        },
+        "plan_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set once the itinerary has been saved through the API.",
+          "title": "Plan Id"
+        },
+        "saved": {
+          "default": false,
+          "title": "Saved",
+          "type": "boolean"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time"
+        },
+        "stops": {
+          "items": {
+            "$ref": "#/$defs/PlanStopCreate"
+          },
+          "maxItems": 20,
+          "title": "Stops",
+          "type": "array"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "title": "Itinerary",
+      "type": "object"
+    },
+    "Place": {
+      "properties": {
+        "address": {
+          "default": "",
+          "title": "Address",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "dinner",
+            "music",
+            "drinks",
+            "activity",
+            "dessert",
+            "coffee"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "closes_at": {
+          "default": "",
+          "description": "Local time, HH:MM.",
+          "title": "Closes At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "opens_at": {
+          "default": "",
+          "description": "Local time, HH:MM.",
+          "title": "Opens At",
+          "type": "string"
+        },
+        "price_level": {
+          "default": 2,
+          "enum": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "title": "Price Level",
+          "type": "integer"
+        },
+        "rating": {
+          "default": 0.0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Rating",
+          "type": "number"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "typical_cost_per_person": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Typical Cost Per Person",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "latitude",
+        "longitude"
+      ],
+      "title": "Place",
+      "type": "object"
+    },
+    "PlaceDetails": {
+      "properties": {
+        "address": {
+          "default": "",
+          "title": "Address",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "dinner",
+            "music",
+            "drinks",
+            "activity",
+            "dessert",
+            "coffee"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "closes_at": {
+          "default": "",
+          "description": "Local time, HH:MM.",
+          "title": "Closes At",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "opens_at": {
+          "default": "",
+          "description": "Local time, HH:MM.",
+          "title": "Opens At",
+          "type": "string"
+        },
+        "phone": {
+          "default": "",
+          "title": "Phone",
+          "type": "string"
+        },
+        "price_level": {
+          "default": 2,
+          "enum": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "title": "Price Level",
+          "type": "integer"
+        },
+        "rating": {
+          "default": 0.0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Rating",
+          "type": "number"
+        },
+        "reservation_required": {
+          "default": false,
+          "title": "Reservation Required",
+          "type": "boolean"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "typical_cost_per_person": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Typical Cost Per Person",
+          "type": "number"
+        },
+        "website": {
+          "default": "",
+          "title": "Website",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "latitude",
+        "longitude"
+      ],
+      "title": "PlaceDetails",
+      "type": "object"
+    },
+    "PlanCreate": {
+      "properties": {
+        "agent_run_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Run Id"
+        },
+        "estimated_cost": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Cost",
+          "type": "number"
+        },
+        "estimated_walk_distance_km": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Walk Distance Km",
+          "type": "number"
+        },
+        "idempotency_key": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Makes a repeated save of the same tool call a no-op.",
+          "title": "Idempotency Key"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": -90,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "maximum": 180,
+              "minimum": -180,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longitude"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "start_time": {
+          "format": "date-time",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "status": {
+          "default": "saved",
+          "enum": [
+            "draft",
+            "saved",
+            "archived"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "stops": {
+          "items": {
+            "$ref": "#/$defs/PlanStopCreate"
+          },
+          "maxItems": 20,
+          "title": "Stops",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "start_time"
+      ],
+      "title": "PlanCreate",
+      "type": "object"
+    },
+    "PlanList": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/PlanRead"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total"
+      ],
+      "title": "PlanList",
+      "type": "object"
+    },
+    "PlanRead": {
+      "properties": {
+        "agent_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Run Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by_user_id": {
+          "title": "Created By User Id",
+          "type": "string"
+        },
+        "estimated_cost": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Cost",
+          "type": "number"
+        },
+        "estimated_walk_distance_km": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Walk Distance Km",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": -90,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "maximum": 180,
+              "minimum": -180,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longitude"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "organization_id": {
+          "title": "Organization Id",
+          "type": "string"
+        },
+        "start_time": {
+          "format": "date-time",
+          "title": "Start Time",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "saved",
+            "archived"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "stops": {
+          "items": {
+            "$ref": "#/$defs/PlanStopRead"
+          },
+          "title": "Stops",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "start_time",
+        "id",
+        "organization_id",
+        "created_by_user_id",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "PlanRead",
+      "type": "object"
+    },
+    "PlanStopCreate": {
+      "properties": {
+        "address": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "category": {
+          "enum": [
+            "dinner",
+            "music",
+            "drinks",
+            "activity",
+            "dessert",
+            "coffee"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "end_time": {
+          "format": "date-time",
+          "title": "End Time",
+          "type": "string"
+        },
+        "estimated_cost": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Cost",
+          "type": "number"
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "description": "Why the agent chose this stop.",
+          "maxLength": 2000,
+          "title": "Reason",
+          "type": "string"
+        },
+        "start_time": {
+          "format": "date-time",
+          "title": "Start Time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "category",
+        "start_time",
+        "end_time",
+        "latitude",
+        "longitude"
+      ],
+      "title": "PlanStopCreate",
+      "type": "object"
+    },
+    "PlanStopRead": {
+      "properties": {
+        "address": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "category": {
+          "enum": [
+            "dinner",
+            "music",
+            "drinks",
+            "activity",
+            "dessert",
+            "coffee"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "end_time": {
+          "format": "date-time",
+          "title": "End Time",
+          "type": "string"
+        },
+        "estimated_cost": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Estimated Cost",
+          "type": "number"
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "title": "Position",
+          "type": "integer"
+        },
+        "reason": {
+          "default": "",
+          "description": "Why the agent chose this stop.",
+          "maxLength": 2000,
+          "title": "Reason",
+          "type": "string"
+        },
+        "start_time": {
+          "format": "date-time",
+          "title": "Start Time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "category",
+        "start_time",
+        "end_time",
+        "latitude",
+        "longitude",
+        "id",
+        "position"
+      ],
+      "title": "PlanStopRead",
+      "type": "object"
+    },
+    "PlanUpdate": {
+      "properties": {
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "draft",
+                "saved",
+                "archived"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "stops": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PlanStopCreate"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stops"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "title": "PlanUpdate",
+      "type": "object"
+    },
+    "Route": {
+      "properties": {
+        "legs": {
+          "items": {
+            "$ref": "#/$defs/RouteLeg"
+          },
+          "title": "Legs",
+          "type": "array"
+        },
+        "mode": {
+          "default": "walk",
+          "enum": [
+            "walk",
+            "transit",
+            "drive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "total_distance_km": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Total Distance Km",
+          "type": "number"
+        },
+        "total_duration_minutes": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Total Duration Minutes",
+          "type": "number"
+        }
+      },
+      "title": "Route",
+      "type": "object"
+    },
+    "RouteLeg": {
+      "properties": {
+        "distance_km": {
+          "minimum": 0,
+          "title": "Distance Km",
+          "type": "number"
+        },
+        "duration_minutes": {
+          "minimum": 0,
+          "title": "Duration Minutes",
+          "type": "number"
+        },
+        "from_name": {
+          "title": "From Name",
+          "type": "string"
+        },
+        "mode": {
+          "default": "walk",
+          "enum": [
+            "walk",
+            "transit",
+            "drive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "to_name": {
+          "title": "To Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_name",
+        "to_name",
+        "distance_km",
+        "duration_minutes"
+      ],
+      "title": "RouteLeg",
+      "type": "object"
+    },
+    "SavePlanOutput": {
+      "properties": {
+        "estimated_cost": {
+          "minimum": 0,
+          "title": "Estimated Cost",
+          "type": "number"
+        },
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "stop_count": {
+          "title": "Stop Count",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_id",
+        "status",
+        "title",
+        "estimated_cost",
+        "stop_count"
+      ],
+      "title": "SavePlanOutput",
+      "type": "object"
+    },
+    "SearchEventsInput": {
+      "properties": {
+        "genre": {
+          "default": "",
+          "title": "Genre",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "limit": {
+          "default": 10,
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "max_ticket_price": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Ticket Price"
+        },
+        "radius_km": {
+          "default": 2.0,
+          "exclusiveMinimum": 0,
+          "maximum": 25,
+          "title": "Radius Km",
+          "type": "number"
+        },
+        "start_after": {
+          "format": "date-time",
+          "title": "Start After",
+          "type": "string"
+        },
+        "start_before": {
+          "format": "date-time",
+          "title": "Start Before",
+          "type": "string"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude",
+        "start_after",
+        "start_before"
+      ],
+      "title": "SearchEventsInput",
+      "type": "object"
+    },
+    "SearchEventsOutput": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "provider": {
+          "default": "fixture",
+          "title": "Provider",
+          "type": "string"
+        },
+        "total": {
+          "default": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "title": "SearchEventsOutput",
+      "type": "object"
+    },
+    "SearchPlacesInput": {
+      "properties": {
+        "category": {
+          "enum": [
+            "dinner",
+            "music",
+            "drinks",
+            "activity",
+            "dessert",
+            "coffee"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "limit": {
+          "default": 10,
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "max_price_level": {
+          "default": 4,
+          "enum": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "title": "Max Price Level",
+          "type": "integer"
+        },
+        "radius_km": {
+          "default": 2.0,
+          "exclusiveMinimum": 0,
+          "maximum": 25,
+          "title": "Radius Km",
+          "type": "number"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude",
+        "category"
+      ],
+      "title": "SearchPlacesInput",
+      "type": "object"
+    },
+    "SearchPlacesOutput": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Place"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "provider": {
+          "default": "fixture",
+          "title": "Provider",
+          "type": "string"
+        },
+        "total": {
+          "default": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "title": "SearchPlacesOutput",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "AgentRunRead": {
+      "$ref": "#/$defs/AgentRunRead"
+    },
+    "BuildRouteInput": {
+      "$ref": "#/$defs/BuildRouteInput"
+    },
+    "Event": {
+      "$ref": "#/$defs/Event"
+    },
+    "Itinerary": {
+      "$ref": "#/$defs/Itinerary"
+    },
+    "Place": {
+      "$ref": "#/$defs/Place"
+    },
+    "PlaceDetails": {
+      "$ref": "#/$defs/PlaceDetails"
+    },
+    "PlanCreate": {
+      "$ref": "#/$defs/PlanCreate"
+    },
+    "PlanList": {
+      "$ref": "#/$defs/PlanList"
+    },
+    "PlanRead": {
+      "$ref": "#/$defs/PlanRead"
+    },
+    "PlanStopCreate": {
+      "$ref": "#/$defs/PlanStopCreate"
+    },
+    "PlanStopRead": {
+      "$ref": "#/$defs/PlanStopRead"
+    },
+    "PlanUpdate": {
+      "$ref": "#/$defs/PlanUpdate"
+    },
+    "Route": {
+      "$ref": "#/$defs/Route"
+    },
+    "SavePlanOutput": {
+      "$ref": "#/$defs/SavePlanOutput"
+    },
+    "SearchEventsInput": {
+      "$ref": "#/$defs/SearchEventsInput"
+    },
+    "SearchEventsOutput": {
+      "$ref": "#/$defs/SearchEventsOutput"
+    },
+    "SearchPlacesInput": {
+      "$ref": "#/$defs/SearchPlacesInput"
+    },
+    "SearchPlacesOutput": {
+      "$ref": "#/$defs/SearchPlacesOutput"
+    }
+  },
+  "title": "SaaSContracts",
+  "type": "object"
+}
