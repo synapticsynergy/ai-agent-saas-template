@@ -60,6 +60,7 @@ install: ## Install all JavaScript and Python dependencies
 	$(call require_tool,pnpm,Install with: corepack enable pnpm)
 	$(call require_tool,uv,Install with: curl -LsSf https://astral.sh/uv/install.sh | sh)
 	$(PNPM) install
+	$(UV) sync --project $(CONTRACTS)
 	$(UV) sync --project $(API)
 	$(UV) sync --project $(AGENT)
 	$(UV) sync --project $(MCP)
