@@ -140,7 +140,7 @@ async def _plan(
     yield stream.step_finished(ProgressStage.BUILDING_ITINERARY)
 
     yield stream.message_start()
-    for chunk in _narrate(itinerary, request, note, intent):
+    async for chunk in context.interpreter.narrate(itinerary, request, note):
         yield stream.message_delta(chunk)
     yield stream.message_end()
 
@@ -384,45 +384,6 @@ def _summarize(name: str, result: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Narration
 # ---------------------------------------------------------------------------
-
-
-def _narrate(
-    itinerary: Itinerary, request: PlanningRequest, note: str, intent: Intent
-) -> list[str]:
-    """Compose the assistant's reply as deltas.
-
-    Under ``AGENT_MODEL_PROVIDER=bedrock`` the model writes this; the composed
-    version below is the fallback and the deterministic path used by tests.
-    """
-    if not itinerary.stops:
-        return [
-            "I could not find anything that fits those constraints. ",
-            "Widening the walking radius or raising the budget would help.",
-        ]
-
-    chunks: list[str] = []
-    if note:
-        chunks.append(note + " ")
-
-    chunks.append(
-        f"Here is a {len(itinerary.stops)}-stop evening for about ${itinerary.estimated_cost:.0f}"
-    )
-    if itinerary.estimated_walk_distance_km:
-        chunks.append(f", with {itinerary.estimated_walk_distance_km:.1f} km of walking")
-    chunks.append(". ")
-
-    if request.budget is not None and itinerary.estimated_cost > request.budget:
-        chunks.append(
-            f"That is over your ${request.budget:.0f} budget — "
-            "ask me to make it cheaper and I will find closer to it. "
-        )
-
-    if intent == "save":
-        chunks.append("Ready to save it when you are.")
-    else:
-        chunks.append("Ask me to make it cheaper, change the music, or shorten the walking.")
-
-    return chunks
 
 
 def context_from_input(payload: RunAgentInput, access_token: str | None) -> RunContext:

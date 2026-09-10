@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 os.environ.setdefault("APP_ENV", "local")
 os.environ.setdefault("AGENT_MODEL_PROVIDER", "scripted")
@@ -127,9 +128,9 @@ class StubTools:
     ) -> None:
         self.places = PLACES if places is None else places
         self.events = EVENTS if events is None else events
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    async def search_places(self, **kwargs) -> list[Place]:
+    async def search_places(self, **kwargs: Any) -> list[Place]:
         self.calls.append(("search_places", kwargs))
         candidates = self.places.get(kwargs["category"], [])
         radius = kwargs.get("radius_km", 2.5)
@@ -140,7 +141,7 @@ class StubTools:
             <= radius
         ]
 
-    async def search_events(self, **kwargs) -> list[Event]:
+    async def search_events(self, **kwargs: Any) -> list[Event]:
         self.calls.append(("search_events", kwargs))
         results = [
             e
@@ -154,7 +155,7 @@ class StubTools:
             results = [e for e in results if e.ticket_price <= cap]
         return results
 
-    async def build_route(self, **kwargs) -> Route:
+    async def build_route(self, **kwargs: Any) -> Route:
         self.calls.append(("build_route", kwargs))
         stops = kwargs["stops"]
         legs = []

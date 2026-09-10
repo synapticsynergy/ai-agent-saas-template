@@ -1,29 +1,32 @@
-"""Request interpretation.
+"""Language: interpreting the request and explaining the result.
 
-Turning a sentence into a :class:`PlanningRequest` is the one job in this agent
-that genuinely needs a language model, so it is the only place one is used
-(see docs/adr/ADR-007-deterministic-planner.md).
+These are the two jobs in this agent that genuinely need a language model, and
+the only places one is used. Choosing venues, timing and budget is ordinary
+code (see docs/adr/ADR-007-deterministic-planner.md).
 
 Two implementations behind one interface:
 
-* :class:`BedrockInterpreter` — a Strands agent on Amazon Bedrock, asked for
-  structured output.
-* :class:`RuleInterpreter` — deterministic keyword extraction. Used when
-  ``AGENT_MODEL_PROVIDER=scripted``, and as the fallback whenever a model call
-  fails, so a Bedrock outage degrades the agent's *understanding* rather than
-  taking the product down.
+* :class:`BedrockInterpreter` — a Strands agent on Amazon Bedrock. Interprets
+  via structured output, narrates via a streamed completion.
+* :class:`RuleInterpreter` — deterministic keyword extraction and composed
+  prose. Used when ``AGENT_MODEL_PROVIDER=scripted``, and as the fallback
+  whenever a model call fails, so a Bedrock outage degrades how the agent reads
+  and writes rather than taking the product down.
 
-Both return the same structure, so nothing downstream knows or cares which ran.
+Both satisfy the same protocol, so nothing downstream knows or cares which ran.
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any, Protocol
 
 import structlog
+from saas_contracts.plan import Itinerary
 
 from agent_app.config import settings
+from agent_app.narration import compose_narration
 from agent_app.workflows.parse import parse_with_rules
 from agent_app.workflows.request import PlanningRequest
 
@@ -49,6 +52,24 @@ These rank venues; they never exclude one.
 Do not invent constraints the person did not express.\
 """
 
+NARRATION_PROMPT = """\
+You explain an evening itinerary that has already been built for someone.
+
+The itinerary is rendered beside your message as a map and a list of cards, so \
+do not restate it stop by stop. Say what is worth knowing about it: what it \
+costs, how much walking it involves, why it fits what they asked for, and \
+anything that does not fit.
+
+Rules:
+- Two or three sentences. No lists, no headings.
+- Never invent a venue, price, time or address. Everything you say about the \
+world comes from the itinerary you are given.
+- If the plan exceeds the stated budget, say so plainly rather than glossing it.
+- If there are no stops, say nothing was found and suggest which constraint to \
+relax.
+- End by inviting a revision: cheaper, a different genre, less walking, or save it.\
+"""
+
 
 class Interpreter(Protocol):
     name: str
@@ -57,9 +78,13 @@ class Interpreter(Protocol):
         self, text: str, *, latitude: float, longitude: float, start_time: datetime | None
     ) -> PlanningRequest: ...
 
+    def narrate(
+        self, itinerary: Itinerary, request: PlanningRequest, note: str
+    ) -> AsyncIterator[str]: ...
+
 
 class RuleInterpreter:
-    """Deterministic keyword extraction. No model, no network."""
+    """Deterministic keyword extraction and composed prose. No model, no network."""
 
     name = "rules"
 
@@ -67,6 +92,12 @@ class RuleInterpreter:
         self, text: str, *, latitude: float, longitude: float, start_time: datetime | None
     ) -> PlanningRequest:
         return parse_with_rules(text, latitude=latitude, longitude=longitude, start_time=start_time)
+
+    async def narrate(
+        self, itinerary: Itinerary, request: PlanningRequest, note: str
+    ) -> AsyncIterator[str]:
+        for chunk in compose_narration(itinerary, request, note):
+            yield chunk
 
 
 class BedrockInterpreter:
@@ -80,23 +111,32 @@ class BedrockInterpreter:
     name = "bedrock"
 
     def __init__(self) -> None:
-        # Strands' Agent is untyped at this boundary, so the attribute is Any
-        # rather than pretending to a precision the SDK does not provide.
+        # Strands' Agent is untyped at this boundary, so these are Any rather
+        # than pretending to a precision the SDK does not provide.
         self._agent: Any = None
+        self._narrator: Any = None
 
     def _build(self) -> Any:
         # Imported lazily so `AGENT_MODEL_PROVIDER=scripted` never needs boto3
         # credentials or a Bedrock-capable environment.
         from strands import Agent
+
+        return Agent(model=self._model(), system_prompt=SYSTEM_PROMPT)
+
+    def _build_narrator(self) -> Any:
+        from strands import Agent
+
+        return Agent(model=self._model(), system_prompt=NARRATION_PROMPT)
+
+    def _model(self) -> Any:
         from strands.models import BedrockModel
 
-        model = BedrockModel(
+        return BedrockModel(
             model_id=settings.bedrock_model_id,
             region_name=settings.bedrock_region,
             max_tokens=settings.bedrock_max_tokens,
             temperature=settings.bedrock_temperature,
         )
-        return Agent(model=model, system_prompt=SYSTEM_PROMPT)
 
     async def interpret(
         self, text: str, *, latitude: float, longitude: float, start_time: datetime | None
@@ -123,13 +163,82 @@ class BedrockInterpreter:
             return defaults
 
         # Re-pin the fields the model must not decide, whatever it returned.
-        return extracted.model_copy(
+        pinned: PlanningRequest = extracted.model_copy(
             update={
                 "latitude": latitude,
                 "longitude": longitude,
                 "start_time": defaults.start_time,
             }
         )
+        return pinned
+
+    async def narrate(
+        self, itinerary: Itinerary, request: PlanningRequest, note: str
+    ) -> AsyncIterator[str]:
+        """Stream the model's explanation of a finished itinerary.
+
+        The model is given the plan as facts and asked to comment on it. It
+        never chooses anything: the itinerary is already built, so the worst a
+        bad completion can do is describe it poorly.
+
+        Deltas are forwarded as they arrive, so the reply appears while it is
+        being written rather than landing in one block.
+        """
+        if self._narrator is None:
+            self._narrator = self._build_narrator()
+
+        prompt = _narration_prompt(itinerary, request, note)
+        produced = False
+
+        try:
+            async for event in self._narrator.stream_async(prompt):
+                delta = event.get("data") if isinstance(event, dict) else None
+                if delta:
+                    produced = True
+                    yield str(delta)
+        except Exception as exc:
+            log.warning("interpreter.narration_failed", error=str(exc))
+
+        if not produced:
+            # An empty completion is as useless as a failed one.
+            for chunk in compose_narration(itinerary, request, note):
+                yield chunk
+
+
+def _narration_prompt(itinerary: Itinerary, request: PlanningRequest, note: str) -> str:
+    """Describe the itinerary as facts for the model to comment on."""
+    if not itinerary.stops:
+        return (
+            "No itinerary could be built. The person asked for "
+            f"{', '.join(request.categories)}"
+            + (f" under {request.budget:.0f}." if request.budget else ".")
+            + " Tell them nothing matched and which constraint to relax."
+        )
+
+    stops = "\n".join(
+        f"{index + 1}. {stop.name} ({stop.category}), "
+        f"{stop.start_time:%-I:%M %p} to {stop.end_time:%-I:%M %p}, "
+        f"{stop.estimated_cost:.0f} per person. {stop.reason}"
+        for index, stop in enumerate(itinerary.stops)
+    )
+
+    asked = [f"categories: {', '.join(request.categories)}"]
+    if request.budget is not None:
+        asked.append(f"budget: {request.budget:.0f} total for {request.party_size}")
+    if request.music_genre:
+        asked.append(f"genre: {request.music_genre}")
+    if request.preference_tags:
+        asked.append(f"preferences: {', '.join(request.preference_tags)}")
+    asked.append(f"max walk: {request.max_walk_km:.1f} km")
+
+    return (
+        f"They asked for — {'; '.join(asked)}.\n\n"
+        + (f"What changed this time: {note}\n\n" if note else "")
+        + f"The itinerary:\n{stops}\n\n"
+        f"Totals: {itinerary.estimated_cost:.0f} for the party, "
+        f"{itinerary.estimated_walk_distance_km:.1f} km of walking, "
+        f"{len(itinerary.stops)} stops."
+    )
 
 
 def get_interpreter() -> Interpreter:

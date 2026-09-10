@@ -274,3 +274,105 @@ class TestInterpreterSelection:
         assert result.start_time == TONIGHT
         # What the model *is* allowed to decide survives.
         assert result.categories == ["dinner"]
+
+
+class TestNarration:
+    """The model explains the plan; it never decides it.
+
+    Regression guard: `AGENT_MODEL_PROVIDER=bedrock` used to change nothing
+    about the reply — the composed text was always used, while a docstring
+    claimed otherwise.
+    """
+
+    async def test_the_rule_interpreter_composes_the_reply(self) -> None:
+        from agent_app.interpreter import RuleInterpreter
+
+        itinerary = await build_itinerary(
+            PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
+            StubTools().planner_tools,
+        )
+
+        chunks = [
+            chunk
+            async for chunk in RuleInterpreter().narrate(
+                itinerary, PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT), ""
+            )
+        ]
+        assert "".join(chunks).startswith("Here is a 3-stop evening")
+
+    async def test_the_model_writes_the_reply_when_bedrock_is_selected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from agent_app.interpreter import BedrockInterpreter
+
+        class StreamingAgent:
+            async def stream_async(self, prompt: str):  # type: ignore[no-untyped-def]
+                self.prompt = prompt
+                for delta in ["A short ", "walk between ", "three good stops."]:
+                    yield {"data": delta}
+
+        narrator = StreamingAgent()
+        interpreter = BedrockInterpreter()
+        monkeypatch.setattr(interpreter, "_build_narrator", lambda: narrator)
+
+        itinerary = await build_itinerary(
+            PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
+            StubTools().planner_tools,
+        )
+        request = PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT, budget=100.0)
+
+        text = "".join([chunk async for chunk in interpreter.narrate(itinerary, request, "")])
+
+        assert text == "A short walk between three good stops."
+
+        # The model is given the plan as facts, so it has nothing to invent:
+        # every stop, and the constraints it should judge the plan against.
+        for stop in itinerary.stops:
+            assert stop.name in narrator.prompt
+        assert "budget: 100" in narrator.prompt
+        assert f"{len(itinerary.stops)} stops" in narrator.prompt
+
+    async def test_a_narration_failure_falls_back_to_composed_text(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from agent_app.interpreter import BedrockInterpreter
+
+        class ExplodingAgent:
+            async def stream_async(self, _prompt: str):  # type: ignore[no-untyped-def]
+                raise RuntimeError("bedrock unavailable")
+                yield  # pragma: no cover - unreachable, marks this a generator
+
+        interpreter = BedrockInterpreter()
+        monkeypatch.setattr(interpreter, "_build_narrator", lambda: ExplodingAgent())
+
+        itinerary = await build_itinerary(
+            PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
+            StubTools().planner_tools,
+        )
+        request = PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT)
+
+        text = "".join([chunk async for chunk in interpreter.narrate(itinerary, request, "")])
+        assert "3-stop evening" in text
+
+    async def test_an_empty_completion_also_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A silent model is as useless as a broken one."""
+        from agent_app.interpreter import BedrockInterpreter
+
+        class SilentAgent:
+            async def stream_async(self, _prompt: str):  # type: ignore[no-untyped-def]
+                return
+                yield  # pragma: no cover - unreachable, marks this a generator
+
+        interpreter = BedrockInterpreter()
+        monkeypatch.setattr(interpreter, "_build_narrator", lambda: SilentAgent())
+
+        itinerary = await build_itinerary(
+            PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
+            StubTools().planner_tools,
+        )
+        request = PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT)
+
+        text = "".join([chunk async for chunk in interpreter.narrate(itinerary, request, "")])
+        assert text

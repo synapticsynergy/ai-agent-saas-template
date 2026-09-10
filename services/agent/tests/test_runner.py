@@ -6,6 +6,7 @@ gating and error handling without a network or a model.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -48,7 +49,9 @@ class StubMcpClient(StubTools):
 
 
 @pytest.fixture
-def patch_client(monkeypatch: pytest.MonkeyPatch):
+def patch_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[StubMcpClient], StubMcpClient]:
     def _install(client: StubMcpClient) -> StubMcpClient:
         import agent_app.runner as runner_module
 
