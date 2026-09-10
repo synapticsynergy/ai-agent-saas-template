@@ -37,19 +37,47 @@ function approvalDialog(page: Page) {
   return page.getByRole("dialog", { name: "Save this plan?" });
 }
 
+function chatInput(page: Page) {
+  return page.getByPlaceholder("Describe your evening…");
+}
+
 async function openAssistant(page: Page) {
-  const input = page.getByPlaceholder("Describe your evening…");
+  const input = chatInput(page);
   if (await input.isVisible().catch(() => false)) return input;
 
-  await page.getByRole("button", { name: /open chat/i }).click();
+  await page.getByTestId("copilot-chat-toggle").click();
   await expect(input).toBeVisible();
   return input;
 }
 
-async function ask(page: Page, message: string) {
+/**
+ * Close the assistant from the panel's own header.
+ *
+ * Not the corner toggle: below `md` the popup is fullscreen and covers it, so
+ * the toggle is unclickable exactly when the panel is open. The header button
+ * works on every viewport.
+ */
+async function closeAssistant(page: Page) {
+  await page.getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(chatInput(page)).toBeHidden();
+}
+
+/**
+ * Send a message, then step out of the way.
+ *
+ * On a phone the panel covers the whole screen, so a person reads the result
+ * by closing it — and so does the suite, which keeps assertions about the
+ * itinerary identical on both viewports.
+ *
+ * Pass `thenClose: false` when the message is expected to raise the approval
+ * dialog: that modal renders above the chat and blocks pointer events, so
+ * closing the panel afterwards is both impossible and unnecessary.
+ */
+async function ask(page: Page, message: string, { thenClose = true } = {}) {
   const input = await openAssistant(page);
   await input.fill(message);
   await input.press("Enter");
+  if (thenClose) await closeAssistant(page);
 }
 
 async function planAnEvening(page: Page) {
@@ -68,19 +96,18 @@ test.describe("Planner", () => {
     await expect(page.getByText("No itinerary yet")).toBeVisible();
   });
 
-  test("the assistant opens from the corner button and from the empty state", async ({
+  test("the assistant opens from the empty state and from the corner button", async ({
     page,
   }) => {
     await page.goto("/planner");
 
     await page.getByTestId("open-assistant").click();
-    await expect(page.getByPlaceholder("Describe your evening…")).toBeVisible();
+    await expect(chatInput(page)).toBeVisible();
 
-    await page.getByRole("button", { name: /close chat/i }).click();
-    await expect(page.getByPlaceholder("Describe your evening…")).toBeHidden();
+    await closeAssistant(page);
 
-    await page.getByRole("button", { name: /open chat/i }).click();
-    await expect(page.getByPlaceholder("Describe your evening…")).toBeVisible();
+    await page.getByTestId("copilot-chat-toggle").click();
+    await expect(chatInput(page)).toBeVisible();
   });
 
   test("a request renders a structured itinerary over the map", async ({ page }) => {
@@ -186,7 +213,7 @@ test.describe("Saving", () => {
   test("asking the assistant to save also asks for approval", async ({ page }) => {
     await planAnEvening(page);
 
-    await ask(page, "Save this plan.");
+    await ask(page, "Save this plan.", { thenClose: false });
     await expect(approvalDialog(page)).toBeVisible({ timeout: RUN_TIMEOUT });
   });
 });
