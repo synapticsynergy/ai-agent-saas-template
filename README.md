@@ -4,13 +4,14 @@ A reusable, production-oriented starter for building full-stack agentic SaaS app
 
 The template is intentionally opinionated around:
 
-- **Next.js + TypeScript** for the product UI
+- **Next.js + TypeScript + Material UI** for the product UI
 - **CopilotKit / AG-UI** for agent ↔ UI interaction and streaming
 - **WorkOS AuthKit** for authentication, organizations, and RBAC
 - **FastAPI + Python** for deterministic application APIs and persistence
 - **Amazon Bedrock AgentCore Runtime** for agent execution
 - **Strands Agents** for Python agent orchestration
 - **MCP / AgentCore Gateway** for tools and interoperable agent capabilities
+- **Leaflet + OpenStreetMap** for the itinerary map
 - **Postgres, S3, and optional DynamoDB** for application persistence
 - **Terraform** for AWS infrastructure as code
 - **Docker Compose + LocalStack** for fast local development of conventional AWS services
@@ -366,7 +367,9 @@ make infra-up
 make dev
 ```
 
-Then open <http://localhost:3000> and ask for an evening.
+Then open <http://localhost:3000>, go to the planner, and open the assistant in
+the corner. The map fills the page and the itinerary floats over it as the agent
+builds it.
 
 Out of the box this runs **without any cloud credentials**:
 
@@ -534,9 +537,9 @@ See [docs/TESTING.md](docs/TESTING.md).
 - [x] CopilotKit runtime with server-side identity injection
 - [x] Shared UI/agent state — the itinerary is application state, not prose
 - [x] MCP tool use over streamable HTTP
-- [x] MCP App resource (`ui://itinerary/map`), with a MapLibre fallback in the
-      web app (see [ADR-008](docs/adr/ADR-008-conversation-threads-are-not-stored.md)
-      for what the host does not yet support)
+- [x] MCP App resource (`ui://itinerary/map`), with a Leaflet fallback in the
+      web app (see [REFERENCE_APP.md](docs/REFERENCE_APP.md#mcp-app) for what
+      the host does not yet support)
 - [x] Human approval, kept distinct from authorization
 - [x] Agent run and tool-call records for traces and cost
 - [x] Evaluation suite scoring structured outcomes

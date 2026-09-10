@@ -17,20 +17,47 @@ Two conventions worth knowing:
   `MuiButtonBase` and `MuiLink` in the theme. Server-rendered pages just write
   `<Button href="/plans">` and still get client-side navigation.
 
+## The planner surface
+
+The map fills the viewport and the itinerary floats over it. The plan — not the
+conversation — is what the person came to look at, so the conversation lives in
+CopilotKit's popup: a button in the corner that slides a panel in.
+
+Both surfaces drive the same agent. `CopilotPopup` sends the messages;
+`usePlannerAgent` subscribes to the resulting AG-UI events and projects them
+into the map, the cards and the progress list. They share one agent instance
+because they name the same `agentId`, so nothing is duplicated and the map
+updates while the reply is still streaming.
+
+Mapping is Leaflet with raster tiles — no key, no WebGL, and a legible street
+map at the scale an itinerary needs. The tile URL and attribution are
+environment variables, so switching providers is configuration.
+
+> The default tiles come from OpenStreetMap's public server. Its usage policy
+> forbids production traffic; point `NEXT_PUBLIC_MAP_TILE_URL` at your own
+> provider before deploying.
+
 ## Structure
 
 ```text
 src/
 ├── app/
-│   ├── (app)/            protected route group; the layout enforces the session
-│   ├── api/copilotkit/   the agent runtime endpoint and identity boundary
-│   ├── auth/callback/    WorkOS AuthKit redirect URI
+│   ├── (app)/                protected area; the layout enforces the session
+│   │   ├── (map)/planner/    full-bleed: the map owns the viewport
+│   │   └── (standard)/plans/ normal padded page
+│   ├── api/copilotkit/       the agent runtime endpoint and identity boundary
+│   ├── auth/callback/        WorkOS AuthKit redirect URI
 │   └── page.tsx
-├── components/           AppShell, PlannerView, ItineraryPanel, ItineraryMap
-├── hooks/                usePlannerAgent, useAgentProgress
-├── lib/                  auth, api, env, itinerary, format
+├── components/
+│   ├── AppShell             app bar; `fullBleed` for map pages
+│   ├── PlannerSurface       client-only boundary (Leaflet needs `window`)
+│   ├── PlannerView          map + overlay + popup + approval
+│   ├── ItineraryOverlay     the floating header and stop cards
+│   └── ItineraryMap         Leaflet, numbered markers, route line
+├── hooks/                   usePlannerAgent, useAgentProgress
+├── lib/                     auth, api, env, itinerary, format
 ├── theme/
-└── middleware.ts         AuthKit session refresh
+└── middleware.ts            AuthKit session refresh
 ```
 
 ## Identity

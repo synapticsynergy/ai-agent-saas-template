@@ -1,24 +1,18 @@
-import { AppShell } from "@/components/AppShell";
-import { isDevFixtureAuth, requireSession } from "@/lib/auth";
-
 /**
- * Protected route group.
+ * Authenticated area.
  *
- * Every page under `(app)` inherits this layout, so authentication is enforced
- * by placement rather than by each page remembering to check. The API enforces
- * the same identity independently on every request.
+ * Enforces the session by placement: every page below this layout has one, so
+ * no page has to remember to check. The API enforces the same identity
+ * independently on every request.
+ *
+ * The visual shell lives in the nested groups, because the planner wants the
+ * whole viewport for its map while everything else wants a normal padded page.
  */
-// Every page in this group depends on the current session, so none of them can
-// be prerendered. Without this the fixture identity would be baked into a
-// static build.
+
+// Every page here depends on the current session, so none can be prerendered.
+// Without this the fixture identity would be baked into a static build.
 export const dynamic = "force-dynamic";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireSession();
-
-  return (
-    <AppShell session={session} devFixtureAuth={isDevFixtureAuth}>
-      {children}
-    </AppShell>
-  );
+export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+  return children;
 }

@@ -83,5 +83,13 @@ export function serverEnv(): ServerEnv {
 export const publicEnv = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000",
-  mapStyleUrl: process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? "https://demotiles.maplibre.org/style.json",
+
+  // Raster tiles. The default is OpenStreetMap's public server, which is fine
+  // for local development but whose usage policy forbids production traffic —
+  // point these at your own provider before deploying.
+  mapTileUrl:
+    process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  mapAttribution:
+    process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ??
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 } as const;

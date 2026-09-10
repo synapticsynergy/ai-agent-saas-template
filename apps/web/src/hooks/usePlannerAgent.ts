@@ -8,11 +8,13 @@ import { useAgentProgress } from "@/hooks/useAgentProgress";
 import { asItinerary, type Itinerary } from "@/lib/itinerary";
 
 /**
- * Drives one planner conversation.
+ * Projects the planner agent's activity into renderable state.
  *
- * Subscribes to the agent's AG-UI events and projects them into the three
- * things the UI actually renders: a progress checklist, the itinerary as
- * application state, and the assistant's message.
+ * Messages are usually sent by CopilotKit's chat popup rather than by this
+ * hook. Both target the same `agentId`, so they share one agent instance and
+ * this subscriber sees every run regardless of what started it. `send` remains
+ * for the actions the UI initiates itself — the save button, and confirming an
+ * approval.
  *
  * The itinerary comes from `STATE_SNAPSHOT` events, never from parsing the
  * assistant's prose. That is what lets the plan be selectable, mappable and

@@ -78,7 +78,14 @@ Walking: 1.3 mi
 [ interactive map ]
 ```
 
-The itinerary should be structured application state rather than information embedded only in assistant prose.
+The itinerary is structured application state, not information embedded in
+assistant prose.
+
+The implementation makes that literal: the map fills the viewport, the
+itinerary floats over it as a header card plus one card per stop, and the
+assistant lives in a popup that slides in from the corner. Selecting a card
+moves the map; the map's numbered markers select the card. None of it is parsed
+out of text — it all comes from the agent's `STATE_SNAPSHOT` events.
 
 ## 5. Replan
 

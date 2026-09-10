@@ -1,16 +1,14 @@
 "use client";
 
 import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import { useMemo } from "react";
-import Map, { Layer, Marker, Source } from "react-map-gl/maplibre";
+import { useTheme } from "@mui/material/styles";
+import L from "leaflet";
+import { useEffect, useMemo } from "react";
+import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 
 import { publicEnv } from "@/lib/env";
 
-import "maplibre-gl/dist/maplibre-gl.css";
-
-/** A CSS size, or one per MUI breakpoint. */
-export type ResponsiveSize = number | string | Partial<Record<string, number | string>>;
+import "leaflet/dist/leaflet.css";
 
 export interface MapStop {
   name: string;
@@ -19,132 +17,151 @@ export interface MapStop {
 }
 
 /**
- * Itinerary map.
+ * The itinerary map.
  *
- * MapLibre with a configurable style URL, so the mapping provider stays
- * replaceable: point `NEXT_PUBLIC_MAP_STYLE_URL` at your own tiles and nothing
- * else changes.
+ * Leaflet with raster tiles: no API key, no WebGL, and a legible street map at
+ * city scale, which is what an itinerary needs. The tile URL and attribution
+ * are configuration, so switching to a commercial provider is an environment
+ * change rather than a rewrite.
+ *
+ * Markers are `divIcon`s rather than image pins so they can carry the stop
+ * number and pick up the MUI palette — the map is part of the design system,
+ * not a foreign object dropped into it.
  */
+
+const MIN_SPAN_DEGREES = 0.004;
+
+// Close-together stops would otherwise fit to maximum zoom, which loses the
+// surrounding streets the walk actually happens on.
+const MAX_FIT_ZOOM = 16;
+
+function numberedIcon(index: number, selected: boolean, color: string): L.DivIcon {
+  const size = selected ? 34 : 28;
+
+  return L.divIcon({
+    className: "itinerary-marker",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    html: `
+      <div style="
+        width:${size}px;height:${size}px;border-radius:50%;
+        display:flex;align-items:center;justify-content:center;
+        background:${selected ? color : "#1a1d21"};
+        color:#fff;font:600 ${selected ? 15 : 13}px/1 system-ui,sans-serif;
+        border:2px solid #fff;
+        box-shadow:0 2px 8px rgba(0,0,0,.35);
+        transition:width .12s,height .12s;
+      ">${index + 1}</div>`,
+  });
+}
+
+/** Keeps the viewport framed on the itinerary as stops change. */
+function FitBounds({ stops }: { stops: MapStop[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (stops.length === 0) return;
+
+    if (stops.length === 1) {
+      const only = stops[0]!;
+      map.setView([only.latitude, only.longitude], 15, { animate: true });
+      return;
+    }
+
+    const bounds = L.latLngBounds(stops.map((s) => [s.latitude, s.longitude] as [number, number]));
+
+    // Pad tiny bounds so a cluster of nearby stops does not zoom to maximum.
+    if (
+      bounds.getNorth() - bounds.getSouth() < MIN_SPAN_DEGREES &&
+      bounds.getEast() - bounds.getWest() < MIN_SPAN_DEGREES
+    ) {
+      map.setView(bounds.getCenter(), MAX_FIT_ZOOM, { animate: true });
+      return;
+    }
+
+    map.fitBounds(bounds, {
+      maxZoom: MAX_FIT_ZOOM,
+      // Generous left padding: the itinerary panel floats over the map there.
+      paddingTopLeft: [window.innerWidth >= 900 ? 460 : 40, 120],
+      paddingBottomRight: [80, 80],
+      animate: true,
+    });
+  }, [map, stops]);
+
+  return null;
+}
+
+/** Centres the selected stop when the list selection changes. */
+function FollowSelection({ stops, selectedIndex }: { stops: MapStop[]; selectedIndex: number }) {
+  const map = useMap();
+  const selected = stops[selectedIndex];
+
+  useEffect(() => {
+    if (!selected) return;
+    map.panTo([selected.latitude, selected.longitude], { animate: true, duration: 0.4 });
+  }, [map, selected]);
+
+  return null;
+}
+
 export function ItineraryMap({
   stops,
   selectedIndex = 0,
   onSelect,
-  height = 380,
+  center,
 }: {
   stops: MapStop[];
   selectedIndex?: number;
   onSelect?: (index: number) => void;
-  /** Responsive breakpoint values are accepted, e.g. `{ xs: 300, md: 460 }`. */
-  height?: ResponsiveSize;
+  /** Where to look before there is an itinerary. */
+  center: { latitude: number; longitude: number };
 }) {
-  const bounds = useMemo(() => {
-    if (stops.length === 0) return null;
+  const theme = useTheme();
+  const accent = theme.palette.primary.main;
 
-    const lats = stops.map((s) => s.latitude);
-    const lons = stops.map((s) => s.longitude);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons);
-    const maxLon = Math.max(...lons);
-
-    // Pad so markers are not flush against the viewport edge.
-    const padLat = Math.max((maxLat - minLat) * 0.35, 0.004);
-    const padLon = Math.max((maxLon - minLon) * 0.35, 0.004);
-
-    return {
-      center: { latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2 },
-      bbox: [minLon - padLon, minLat - padLat, maxLon + padLon, maxLat + padLat] as [
-        number,
-        number,
-        number,
-        number,
-      ],
-    };
-  }, [stops]);
-
-  const routeLine = useMemo(
-    () => ({
-      type: "Feature" as const,
-      properties: {},
-      geometry: {
-        type: "LineString" as const,
-        coordinates: stops.map((stop) => [stop.longitude, stop.latitude]),
-      },
-    }),
+  const route = useMemo(
+    () => stops.map((stop) => [stop.latitude, stop.longitude] as [number, number]),
     [stops],
   );
 
-  if (!bounds) {
-    return (
-      <Box
-        sx={{
-          height,
-          display: "grid",
-          placeItems: "center",
-          borderRadius: 1,
-          bgcolor: "action.hover",
-        }}
-      >
-        <Typography variant="body2" color="text.secondary">
-          The map appears once the itinerary has stops.
-        </Typography>
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ height, borderRadius: 1, overflow: "hidden" }}>
-      <Map
-        initialViewState={{ bounds: bounds.bbox, fitBoundsOptions: { padding: 48 } }}
-        mapStyle={publicEnv.mapStyleUrl}
-        style={{ width: "100%", height: "100%" }}
-        attributionControl={{ compact: true }}
+    <Box
+      sx={{
+        position: "absolute",
+        inset: 0,
+        // Leaflet's own panes sit below the floating panels.
+        "& .leaflet-container": { width: "100%", height: "100%", background: "#e8eaed" },
+        "& .leaflet-control-attribution": { fontSize: 11 },
+      }}
+    >
+      <MapContainer
+        center={[center.latitude, center.longitude]}
+        zoom={14}
+        zoomControl={false}
+        scrollWheelZoom
       >
-        {stops.length > 1 ? (
-          <Source id="route" type="geojson" data={routeLine}>
-            <Layer
-              id="route-line"
-              type="line"
-              paint={{
-                "line-color": "#3d5afe",
-                "line-width": 3,
-                "line-dasharray": [2, 1.5],
-                "line-opacity": 0.7,
-              }}
-            />
-          </Source>
+        <TileLayer url={publicEnv.mapTileUrl} attribution={publicEnv.mapAttribution} maxZoom={19} />
+
+        {route.length > 1 ? (
+          <Polyline
+            positions={route}
+            pathOptions={{ color: accent, weight: 3, opacity: 0.75, dashArray: "6 8" }}
+          />
         ) : null}
 
         {stops.map((stop, index) => (
           <Marker
             key={`${stop.name}-${index}`}
-            latitude={stop.latitude}
-            longitude={stop.longitude}
-            anchor="center"
-            onClick={onSelect ? () => onSelect(index) : undefined}
-          >
-            <Box
-              aria-label={`Stop ${index + 1}: ${stop.name}`}
-              sx={{
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-                fontSize: 13,
-                fontWeight: 700,
-                color: "common.white",
-                cursor: onSelect ? "pointer" : "default",
-                bgcolor: index === selectedIndex ? "primary.main" : "text.disabled",
-                boxShadow: 2,
-                transition: "background-color 120ms",
-              }}
-            >
-              {index + 1}
-            </Box>
-          </Marker>
+            position={[stop.latitude, stop.longitude]}
+            icon={numberedIcon(index, index === selectedIndex, accent)}
+            alt={`Stop ${index + 1}: ${stop.name}`}
+            eventHandlers={onSelect ? { click: () => onSelect(index) } : undefined}
+          />
         ))}
-      </Map>
+
+        <FitBounds stops={stops} />
+        <FollowSelection stops={stops} selectedIndex={selectedIndex} />
+      </MapContainer>
     </Box>
   );
 }

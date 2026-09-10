@@ -35,8 +35,11 @@ test.describe("Smoke", () => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    // Dev-server HMR websocket noise is not an application error.
-    const real = errors.filter((text) => !/hmr|websocket|Lit is in dev mode/i.test(text));
+    // Ignore what is not the application's doing: dev-server HMR noise, and
+    // failed map-tile requests from the public OpenStreetMap server.
+    const real = errors.filter(
+      (text) => !/hmr|websocket|Lit is in dev mode|tile\.openstreetmap/i.test(text),
+    );
     expect(real).toEqual([]);
   });
 });

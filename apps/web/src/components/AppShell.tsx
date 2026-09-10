@@ -20,14 +20,17 @@ import type { Session } from "@/lib/auth";
 export function AppShell({
   session,
   devFixtureAuth = false,
+  fullBleed = false,
   children,
 }: {
   session: Session;
   devFixtureAuth?: boolean;
+  /** Let the page own the whole viewport below the bar, with no gutters. */
+  fullBleed?: boolean;
   children: ReactNode;
 }) {
   return (
-    <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+    <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
       <AppBar position="sticky">
         <Toolbar sx={{ gap: { xs: 0.5, sm: 2 } }}>
           {/* The brand collapses on a phone so navigation always fits. The
@@ -74,13 +77,19 @@ export function AppShell({
         </Toolbar>
       </AppBar>
 
-      <Container
-        maxWidth="xl"
-        component="main"
-        sx={{ flexGrow: 1, px: { xs: 2, md: 4 }, py: { xs: 2, md: 3 } }}
-      >
-        {children}
-      </Container>
+      {fullBleed ? (
+        <Box component="main" sx={{ flexGrow: 1, position: "relative", minHeight: 0 }}>
+          {children}
+        </Box>
+      ) : (
+        <Container
+          maxWidth="xl"
+          component="main"
+          sx={{ flexGrow: 1, px: { xs: 2, md: 4 }, py: { xs: 2, md: 3 } }}
+        >
+          {children}
+        </Container>
+      )}
     </Box>
   );
 }

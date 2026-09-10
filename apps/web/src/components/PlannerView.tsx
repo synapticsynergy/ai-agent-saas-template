@@ -1,46 +1,43 @@
 "use client";
 
-import SendIcon from "@mui/icons-material/Send";
+import { CopilotPopup } from "@copilotkit/react-core/v2";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
-import IconButton from "@mui/material/IconButton";
-import InputAdornment from "@mui/material/InputAdornment";
-import Paper from "@mui/material/Paper";
+import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
-import { AgentProgress } from "@/components/AgentProgress";
 import { ItineraryMap } from "@/components/ItineraryMap";
-import { ItineraryPanel } from "@/components/ItineraryPanel";
+import { ItineraryOverlay } from "@/components/ItineraryOverlay";
 import { usePlannerAgent, type PlannerLocation } from "@/hooks/usePlannerAgent";
 import { formatMoney } from "@/lib/format";
 
-const EXAMPLE_REQUEST =
-  "Plan my evening near me. I want dinner, live music, and drinks. Keep it walkable and under $100.";
-
-const FOLLOW_UPS = [
-  "Make it cheaper.",
-  "Replace the live music with jazz.",
-  "Keep it closer together.",
-  "Save this plan.",
-];
+import "@copilotkit/react-core/v2/styles.css";
 
 /**
  * The planner.
  *
- * The itinerary — not a chat transcript — is the primary surface. The
- * assistant's message is supporting context beside it, and the plan itself is
- * rendered from agent state.
+ * The map fills the viewport and the itinerary floats over it. The assistant
+ * lives in CopilotKit's popup — a button in the corner that slides a panel in —
+ * because the plan, not the conversation, is what the person is here to look at.
+ *
+ * Both surfaces drive the same agent: the popup sends the messages, and this
+ * view subscribes to the resulting AG-UI events. Nothing is duplicated, and the
+ * map updates while the person is still reading the reply.
  */
+
+const GREETING =
+  "Hi. Tell me the kind of evening you want and I'll plan it — dinner, live " +
+  "music and drinks, walkable, under $100. Then ask me to make it cheaper, " +
+  "change the music, or save it.";
+
 export function PlannerView({
   location,
   canSave,
@@ -49,125 +46,81 @@ export function PlannerView({
   canSave: boolean;
 }) {
   const planner = usePlannerAgent(location);
-  const [input, setInput] = useState("");
-  const [selected, setSelected] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [selectedRaw, setSelected] = useState(0);
+  const [dismissedSaveToastFor, setDismissedSaveToastFor] = useState<string | null>(null);
 
-  const submit = async (message: string) => {
-    if (!message.trim() || planner.running) return;
-    setInput("");
-    setSelected(0);
-    await planner.send(message);
-  };
+  // Both of these are derived during render rather than synchronised by an
+  // effect. A replan can return fewer stops, and an effect that corrected the
+  // selection afterwards would render one frame pointing at a stop that no
+  // longer exists.
+  const stopCount = planner.itinerary?.stops.length ?? 0;
+  const selected = selectedRaw < stopCount ? selectedRaw : 0;
+
+  // Keyed on the plan id so the confirmation reappears for the next plan the
+  // person saves, but not again for one they have already dismissed.
+  const savedPlanId = planner.itinerary?.saved ? (planner.itinerary.plan_id ?? "saved") : null;
+  const showSaveToast = savedPlanId !== null && savedPlanId !== dismissedSaveToastFor;
+
+  const requestSave = useCallback(() => {
+    void planner.send("Save this plan.");
+  }, [planner]);
 
   return (
-    <Stack spacing={{ xs: 2, md: 3 }}>
-      <Stack spacing={1}>
-        <Typography variant="h2">Tonight</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Describe the evening you want, then refine it in plain language.
-        </Typography>
-      </Stack>
+    <Box sx={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+      <ItineraryMap
+        stops={planner.itinerary?.stops ?? []}
+        selectedIndex={selected}
+        onSelect={setSelected}
+        center={location}
+      />
 
-      <Paper sx={{ p: { xs: 1.5, md: 2 } }}>
-        <Stack spacing={1.5}>
-          <TextField
-            fullWidth
-            multiline
-            maxRows={4}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void submit(input);
-              }
-            }}
-            placeholder={EXAMPLE_REQUEST}
-            disabled={planner.running}
-            label="What kind of evening?"
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="Send request"
-                      onClick={() => void submit(input)}
-                      disabled={planner.running || !input.trim()}
-                      edge="end"
-                    >
-                      <SendIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-            {!planner.itinerary ? (
-              <Chip
-                label="Try the example"
-                onClick={() => void submit(EXAMPLE_REQUEST)}
-                disabled={planner.running}
-              />
-            ) : (
-              FOLLOW_UPS.map((suggestion) => (
-                <Chip
-                  key={suggestion}
-                  label={suggestion}
-                  onClick={() => void submit(suggestion)}
-                  disabled={planner.running}
-                />
-              ))
-            )}
-          </Stack>
-        </Stack>
-      </Paper>
-
-      <AgentProgress stages={planner.stages} visible={planner.running} />
-
-      {planner.error ? <Alert severity="error">{planner.error}</Alert> : null}
+      <ItineraryOverlay
+        itinerary={planner.itinerary}
+        running={planner.running}
+        stages={planner.stages}
+        error={planner.error}
+        canSave={canSave}
+        selectedIndex={selected}
+        onSelect={setSelected}
+        onSave={requestSave}
+        onOpenAssistant={() => setChatOpen(true)}
+      />
 
       {!canSave ? (
-        <Alert severity="info">
-          Your role can view plans but not save them. The assistant will still plan an evening;
-          saving requires the <code>plans:write</code> permission.
+        <Alert
+          severity="info"
+          sx={{
+            position: "absolute",
+            bottom: 16,
+            left: { xs: 16, md: 20 },
+            maxWidth: 400,
+            zIndex: 1000,
+          }}
+        >
+          Your role can view plans but not save them. Saving requires the <code>plans:write</code>{" "}
+          permission.
         </Alert>
       ) : null}
 
-      {planner.assistantMessage ? (
-        <Alert severity="success" icon={false}>
-          {planner.assistantMessage}
-        </Alert>
-      ) : null}
-
-      <Box
-        sx={{
-          display: "grid",
-          gap: { xs: 2, md: 3 },
-          gridTemplateColumns: { xs: "1fr", md: "minmax(0, 5fr) minmax(0, 7fr)" },
-          alignItems: "start",
-        }}
-      >
-        <ItineraryPanel
-          itinerary={planner.itinerary}
-          loading={planner.running}
-          selectedIndex={selected}
-          onSelect={setSelected}
-        />
-
-        <Paper sx={{ p: { xs: 1, md: 1.5 }, position: { md: "sticky" }, top: { md: 88 } }}>
-          <ItineraryMap
-            stops={planner.itinerary?.stops ?? []}
-            selectedIndex={selected}
-            onSelect={setSelected}
-            height={{ xs: 300, md: 460 }}
-          />
-        </Paper>
-      </Box>
+      <CopilotPopup
+        agentId="planner"
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        clickOutsideToClose={false}
+        labels={{ chatInputPlaceholder: "Describe your evening…" }}
+      />
 
       <ApprovalDialog planner={planner} />
-    </Stack>
+
+      <Snackbar
+        open={showSaveToast}
+        autoHideDuration={5000}
+        onClose={() => setDismissedSaveToastFor(savedPlanId)}
+        message="Plan saved to your organization."
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
+    </Box>
   );
 }
 
@@ -180,6 +133,9 @@ function ApprovalDialog({ planner }: { planner: ReturnType<typeof usePlannerAgen
   };
 
   return (
+    // MUI points aria-labelledby at the DialogTitle, so this dialog's
+    // accessible name is "Save this plan?" — which is how tests tell it apart
+    // from the chat popup, itself a role="dialog".
     <Dialog open={Boolean(approval)} onClose={planner.dismissApproval} maxWidth="xs" fullWidth>
       <DialogTitle>Save this plan?</DialogTitle>
       <DialogContent>
@@ -206,4 +162,5 @@ function ApprovalDialog({ planner }: { planner: ReturnType<typeof usePlannerAgen
   );
 }
 
+export { GREETING };
 export default PlannerView;

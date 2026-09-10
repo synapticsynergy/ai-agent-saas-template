@@ -2,7 +2,15 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import type { ProgressStage, StageStatus } from "@/components/AgentProgress";
+export type StageStatus = "pending" | "running" | "done" | "error";
+
+/** One line in the progress checklist the overlay renders. */
+export interface ProgressStage {
+  id: string;
+  label: string;
+  status: StageStatus;
+  detail?: string;
+}
 
 /**
  * Translate AG-UI step and tool events into a progress checklist.
@@ -27,12 +35,6 @@ const TOOL_LABELS: Record<string, string> = {
   get_place_details: "Loading venue details",
   save_plan: "Saving the plan",
 };
-
-export interface AgentProgressState {
-  stages: ProgressStage[];
-  running: boolean;
-  error: string | null;
-}
 
 export function useAgentProgress() {
   const [statuses, setStatuses] = useState<Record<string, StageStatus>>({});

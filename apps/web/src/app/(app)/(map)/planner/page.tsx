@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { CopilotProvider } from "@/components/CopilotProvider";
-import { PlannerView } from "@/components/PlannerView";
+import { PlannerSurface } from "@/components/PlannerSurface";
 import { hasPermission, requireSession } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Planner" };
@@ -16,7 +16,7 @@ export default async function PlannerPage() {
 
   return (
     <CopilotProvider>
-      <PlannerView location={DEFAULT_LOCATION} canSave={hasPermission(session, "plans:write")} />
+      <PlannerSurface location={DEFAULT_LOCATION} canSave={hasPermission(session, "plans:write")} />
     </CopilotProvider>
   );
 }
