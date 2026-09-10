@@ -133,7 +133,7 @@ async def _plan(
 
     yield stream.step_started(ProgressStage.BUILDING_ITINERARY)
     context.itinerary = itinerary
-    yield stream.itinerary_state(itinerary)
+    yield stream.itinerary_state(itinerary, request)
     yield stream.step_finished(ProgressStage.BUILDING_ITINERARY)
 
     yield stream.message_start()
@@ -201,7 +201,7 @@ async def _save(
 
     saved = itinerary.model_copy(update={"plan_id": result.get("plan_id"), "saved": True})
     context.itinerary = saved
-    yield stream.itinerary_state(saved)
+    yield stream.itinerary_state(saved, context.request)
 
     yield stream.message_start()
     yield stream.message_delta(f"Saved. You can find “{saved.title}” in your plans.")
@@ -259,7 +259,7 @@ def _resolve_request(
         start_time=context.start_time,
     )
 
-    previous = context.request
+    previous = context.request or _request_from_itinerary(context)
     if previous is None or intent == "plan":
         return parsed, ""
 
@@ -276,6 +276,29 @@ def _resolve_request(
         return revision.request, revision.summary
 
     return parsed, ""
+
+
+def _request_from_itinerary(context: RunContext) -> PlanningRequest | None:
+    """Reconstruct constraints from the current itinerary.
+
+    A safety net for when the caller does not echo ``planning_request`` back in
+    agent state. Anchoring on the itinerary's own shape and cost means a
+    revision still narrows from where the user actually is, rather than
+    replanning from scratch and ignoring the budget they already stated.
+    """
+    itinerary = context.itinerary
+    if itinerary is None or not itinerary.stops:
+        return None
+
+    categories = list(dict.fromkeys(stop.category for stop in itinerary.stops))
+    return PlanningRequest(
+        latitude=itinerary.latitude if itinerary.latitude is not None else context.latitude,
+        longitude=itinerary.longitude if itinerary.longitude is not None else context.longitude,
+        start_time=itinerary.start_time or context.start_time or itinerary.stops[0].start_time,
+        categories=categories,
+        budget=itinerary.estimated_cost or None,
+        max_walk_km=max(itinerary.estimated_walk_distance_km, 1.0),
+    )
 
 
 # ---------------------------------------------------------------------------

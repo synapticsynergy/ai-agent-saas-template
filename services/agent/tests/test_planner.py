@@ -245,9 +245,7 @@ class TestConstraintsVersusPreferences:
         call = next(kwargs for name, kwargs in tools.calls if name == "search_places")
         assert call["tags"] == ["vegan"]
 
-    async def test_a_preference_still_stays_inside_the_budget(
-        self, tools: StubTools
-    ) -> None:
+    async def test_a_preference_still_stays_inside_the_budget(self, tools: StubTools) -> None:
         request = PlanningRequest(
             latitude=LAT,
             longitude=LON,

@@ -32,6 +32,7 @@ from ag_ui.core import (
     ToolCallResultEvent,
     ToolCallStartEvent,
 )
+from pydantic import BaseModel
 from saas_contracts.plan import Itinerary
 from saas_contracts.streaming import ProgressStage
 
@@ -112,13 +113,23 @@ class EventStream:
 
     # --- shared state -----------------------------------------------------
 
-    def itinerary_state(self, itinerary: Itinerary) -> BaseEvent:
+    def itinerary_state(
+        self, itinerary: Itinerary, planning_request: BaseModel | None = None
+    ) -> BaseEvent:
         """Publish the itinerary as shared agent/UI state.
 
         The itinerary is application state, not a transcript artefact, so the UI
         renders it from here rather than parsing the assistant's prose.
+
+        The resolved planning constraints ride along so that a follow-up run
+        ("make it cheaper") starts from what was actually asked for. Without
+        this the next run reparses only the follow-up sentence, loses the
+        original budget, and cheerfully returns a *more* expensive plan.
         """
-        return StateSnapshotEvent(snapshot={"itinerary": itinerary.model_dump(mode="json")})
+        snapshot: dict[str, Any] = {"itinerary": itinerary.model_dump(mode="json")}
+        if planning_request is not None:
+            snapshot["planning_request"] = planning_request.model_dump(mode="json")
+        return StateSnapshotEvent(snapshot=snapshot)
 
     def approval_requested(self, action: str, detail: dict[str, Any]) -> BaseEvent:
         """Ask the user to confirm a consequential action.

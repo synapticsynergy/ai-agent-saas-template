@@ -137,9 +137,7 @@ class TestPlanningRun:
         patch_client(StubMcpClient())
         events = types_of(await collect("Plan my evening", make_context()))
 
-        assert events.index(EventType.STATE_SNAPSHOT) < events.index(
-            EventType.TEXT_MESSAGE_START
-        )
+        assert events.index(EventType.STATE_SNAPSHOT) < events.index(EventType.TEXT_MESSAGE_START)
 
     async def test_text_deltas_are_well_formed(self, patch_client: Any) -> None:
         patch_client(StubMcpClient())
@@ -206,9 +204,7 @@ class TestFailureHandling:
 
 
 class TestSaveApproval:
-    async def test_an_unapproved_save_asks_rather_than_writing(
-        self, patch_client: Any
-    ) -> None:
+    async def test_an_unapproved_save_asks_rather_than_writing(self, patch_client: Any) -> None:
         client = patch_client(StubMcpClient())
         context = make_context(itinerary=saved_itinerary(), approved=False)
 
@@ -238,9 +234,7 @@ class TestSaveApproval:
         call = next(kwargs for name, kwargs in client.calls if name == "save_plan")
         assert call["idempotency_key"] == "run_1"
 
-    async def test_a_denied_save_is_explained_and_not_retried(
-        self, patch_client: Any
-    ) -> None:
+    async def test_a_denied_save_is_explained_and_not_retried(self, patch_client: Any) -> None:
         """Approval is not authorization: the API can still refuse."""
         client = patch_client(
             StubMcpClient(
@@ -255,7 +249,9 @@ class TestSaveApproval:
 
         events = await collect("Save this plan.", context)
         text = "".join(
-            e.delta for e in events if e.type == EventType.TEXT_MESSAGE_CONTENT  # type: ignore[attr-defined]
+            e.delta
+            for e in events
+            if e.type == EventType.TEXT_MESSAGE_CONTENT  # type: ignore[attr-defined]
         )
 
         assert "permission" in text.lower()
@@ -268,13 +264,15 @@ class TestSaveApproval:
         events = await collect("Save this plan.", make_context(approved=True))
 
         text = "".join(
-            e.delta for e in events if e.type == EventType.TEXT_MESSAGE_CONTENT  # type: ignore[attr-defined]
+            e.delta
+            for e in events
+            if e.type == EventType.TEXT_MESSAGE_CONTENT  # type: ignore[attr-defined]
         )
         assert "no itinerary" in text.lower()
         assert not client.called("save_plan")
 
     async def test_saving_does_not_replan(self, patch_client: Any) -> None:
-        """"Save it" must persist what the user saw, not a freshly built plan."""
+        """ "Save it" must persist what the user saw, not a freshly built plan."""
         client = patch_client(StubMcpClient())
         await collect("Save it.", make_context(itinerary=saved_itinerary(), approved=True))
 
@@ -296,9 +294,7 @@ class TestFollowUps:
         assert context.itinerary is not None
         assert context.itinerary.estimated_cost < original.estimated_cost
 
-    async def test_replacing_the_music_with_jazz_changes_the_stop(
-        self, patch_client: Any
-    ) -> None:
+    async def test_replacing_the_music_with_jazz_changes_the_stop(self, patch_client: Any) -> None:
         patch_client(StubMcpClient())
         context = make_context()
 
@@ -310,3 +306,52 @@ class TestFollowUps:
         assert context.itinerary is not None
         music = next(s for s in context.itinerary.stops if s.category == "music")
         assert music.external_id in {"e_jazz_free", "e_jazz_paid"}
+
+
+class TestConstraintRoundTrip:
+    """A follow-up must not lose the constraints of the original request.
+
+    Regression guard: without the planning constraints surviving between runs,
+    "make it cheaper" reparsed only those three words, found no budget, and
+    returned a *more* expensive plan.
+    """
+
+    async def test_the_constraints_are_published_as_state(self, patch_client: Any) -> None:
+        patch_client(StubMcpClient())
+        events = await collect("Plan an evening under $80", make_context())
+
+        snapshot = next(e for e in events if e.type == EventType.STATE_SNAPSHOT)
+        state = snapshot.snapshot  # type: ignore[attr-defined]
+        assert "planning_request" in state
+        assert state["planning_request"]["budget"] == 80.0
+
+    async def test_a_revision_keeps_the_original_budget(self, patch_client: Any) -> None:
+        patch_client(StubMcpClient())
+        context = make_context()
+
+        await collect("Plan my evening with dinner and drinks under $80", context)
+        assert context.request is not None
+        assert context.request.budget == 80.0
+
+        await collect("Make it cheaper.", context)
+        assert context.request is not None
+        assert context.request.budget is not None
+        assert context.request.budget < 80.0
+
+    async def test_a_revision_recovers_when_state_was_not_echoed_back(
+        self, patch_client: Any
+    ) -> None:
+        """A caller that drops planning_request still gets a sane revision."""
+        patch_client(StubMcpClient())
+
+        first = make_context()
+        await collect("Plan my evening with dinner and drinks under $80", first)
+        original = first.itinerary
+        assert original is not None
+
+        # A fresh context carrying only the itinerary — no planning_request.
+        second = make_context(itinerary=original)
+        await collect("Make it cheaper.", second)
+
+        assert second.itinerary is not None
+        assert second.itinerary.estimated_cost < original.estimated_cost

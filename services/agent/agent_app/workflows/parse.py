@@ -96,9 +96,7 @@ def parse_with_rules(
         max_walk_km=_parse_walk_km(text),
         music_genre=next((genre for genre in _GENRES if genre in lowered), ""),
         dietary_tags=[tag for phrase, tag in _DIETARY_KEYWORDS.items() if phrase in lowered],
-        preference_tags=[
-            tag for phrase, tag in _PREFERENCE_KEYWORDS.items() if phrase in lowered
-        ],
+        preference_tags=[tag for phrase, tag in _PREFERENCE_KEYWORDS.items() if phrase in lowered],
         party_size=_parse_party_size(text),
     )
 

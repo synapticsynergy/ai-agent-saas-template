@@ -87,27 +87,57 @@ def build_json_schema() -> dict[str, Any]:
     return schema
 
 
-def simplify_for_typescript(node: Any) -> Any:
+# Keys whose values are *maps of name → schema*, not schemas themselves. The
+# walk must recurse into their values without treating their keys as keywords.
+_SCHEMA_MAPS = frozenset({"properties", "$defs", "definitions", "patternProperties"})
+
+# Keys whose values are a schema or a list of schemas.
+_SCHEMA_VALUES = frozenset(
+    {"items", "additionalProperties", "not", "if", "then", "else", "contains"}
+)
+_SCHEMA_LISTS = frozenset({"anyOf", "oneOf", "allOf", "prefixItems"})
+
+# Stripped from the TypeScript input only. `title` on a field schema becomes a
+# spurious top-level type alias, and `maxItems` expands an array into a union of
+# tuple types. The canonical schema.json keeps both.
+_STRIP_KEYWORDS = frozenset({"title", "maxItems", "minItems"})
+
+
+def simplify_for_typescript(schema: Any, *, keep_title: bool = True) -> Any:
     """Strip schema metadata that produces unusable TypeScript.
 
-    json-schema-to-typescript turns every field ``title`` into a top-level type
-    alias, and expands ``maxItems`` on an array into a union of tuple types.
-    Both are noise in the emitted ``.d.ts``. The canonical ``schema.json`` keeps
-    them — only the TypeScript input is simplified.
+    Schema-aware rather than a blind recursive walk: a naive version deletes the
+    *property* named "title" along with the "title" keyword, because inside a
+    ``properties`` map the two are indistinguishable by key alone.
+
+    ``keep_title`` is True for named definitions, whose title becomes the
+    generated interface name, and False for field schemas.
     """
-    if isinstance(node, dict):
-        simplified = {
-            key: simplify_for_typescript(value)
-            for key, value in node.items()
-            if key not in {"maxItems", "minItems"}
-        }
-        # Keep titles only on named definitions, which become interface names.
-        if simplified.get("type") != "object" and "properties" not in simplified:
-            simplified.pop("title", None)
-        return simplified
-    if isinstance(node, list):
-        return [simplify_for_typescript(item) for item in node]
-    return node
+    if isinstance(schema, list):
+        return [simplify_for_typescript(item, keep_title=False) for item in schema]
+
+    if not isinstance(schema, dict):
+        return schema
+
+    result: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key in _STRIP_KEYWORDS and not (key == "title" and keep_title):
+            continue
+
+        if key in _SCHEMA_MAPS and isinstance(value, dict):
+            # Recurse into the values; the keys are names, never keywords.
+            result[key] = {
+                name: simplify_for_typescript(sub, keep_title=(key != "properties"))
+                for name, sub in value.items()
+            }
+        elif key in _SCHEMA_LISTS and isinstance(value, list):
+            result[key] = [simplify_for_typescript(item, keep_title=False) for item in value]
+        elif key in _SCHEMA_VALUES:
+            result[key] = simplify_for_typescript(value, keep_title=False)
+        else:
+            result[key] = value
+
+    return result
 
 
 def _ts_enum(name: str, values: list[str]) -> str:

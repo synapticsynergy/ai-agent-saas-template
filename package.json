@@ -1,0 +1,17 @@
+{
+  "name": "ai-agent-saas-template",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Reusable starter for production-oriented multi-tenant agentic SaaS applications",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter web test"
+  }
+}

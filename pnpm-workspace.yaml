@@ -1,0 +1,20 @@
+packages:
+  - "apps/*"
+  - "packages/contracts"
+  - "tests/e2e"
+
+# Post-install build scripts run only for these packages; everything else is
+# blocked. Keep the list short and justified — an install script is arbitrary
+# code execution at `pnpm install` time.
+allowBuilds:
+  # Native binary for the bundler used by Next.js and Vitest.
+  esbuild: true
+  # Native resolver used by eslint-config-next.
+  unrs-resolver: true
+  # Anonymous install telemetry pulled in transitively; not needed.
+  "@scarf/scarf": false
+
+# Refuse packages published within the last 24 hours. A freshly published
+# version is where compromised-package incidents surface first, and nothing
+# here needs a release the same day it ships.
+minimumReleaseAge: 1440

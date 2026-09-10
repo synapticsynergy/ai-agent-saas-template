@@ -115,6 +115,7 @@ export interface Itinerary {
   saved?: boolean;
   start_time?: string | null;
   stops?: PlanStopCreate[];
+  title?: string;
 }
 /**
  * This interface was referenced by `SaaSContracts`'s JSON-Schema
@@ -205,6 +206,7 @@ export interface PlanCreate {
   start_time: string;
   status?: "draft" | "saved" | "archived";
   stops?: PlanStopCreate[];
+  title: string;
 }
 /**
  * This interface was referenced by `SaaSContracts`'s JSON-Schema
@@ -232,6 +234,7 @@ export interface PlanRead {
   start_time: string;
   status: "draft" | "saved" | "archived";
   stops?: PlanStopRead[];
+  title: string;
   updated_at: string;
 }
 /**
@@ -263,6 +266,7 @@ export interface PlanUpdate {
   notes?: string | null;
   status?: ("draft" | "saved" | "archived") | null;
   stops?: PlanStopCreate[] | null;
+  title?: string | null;
 }
 /**
  * This interface was referenced by `SaaSContracts`'s JSON-Schema
@@ -294,6 +298,7 @@ export interface SavePlanOutput {
   plan_id: string;
   status: string;
   stop_count: number;
+  title: string;
 }
 /**
  * This interface was referenced by `SaaSContracts`'s JSON-Schema

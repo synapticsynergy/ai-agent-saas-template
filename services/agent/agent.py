@@ -92,6 +92,13 @@ async def invocations(request: Request) -> Any:
 
     return EventSourceResponse(
         to_sse(_events(payload, _bearer_token(request))),
+        # LF separators, not the CRLF sse-starlette defaults to. Both are valid
+        # SSE, but the AG-UI client splits frames on "\n\n", so CRLF frames
+        # never split and the whole stream arrives as one unparseable blob.
+        sep="\n",
+        # Keep-alive comments would arrive mid-run; the agent's own events are
+        # frequent enough that the connection never idles long enough to matter.
+        ping=15,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
