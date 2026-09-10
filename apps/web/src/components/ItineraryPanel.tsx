@@ -64,19 +64,26 @@ export function ItineraryPanel({
           sx={{ alignItems: "center", flexWrap: "wrap" }}
         >
           <Typography variant="h3">{itinerary.title || "Your evening"}</Typography>
-          {itinerary.saved ? <Chip color="success" label="Saved" /> : null}
+            {itinerary.saved ? (
+            <Chip color="success" data-testid="itinerary-saved" label="Saved" />
+          ) : null}
         </Stack>
 
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
           <Chip
             icon={<PaymentsIcon />}
+            data-testid="itinerary-cost"
             label={formatMoney(itinerary.estimated_cost, itinerary.currency)}
           />
           <Chip
             icon={<DirectionsWalkIcon />}
             label={formatDistance(itinerary.estimated_walk_distance_km)}
           />
-          <Chip icon={<PlaceIcon />} label={`${itinerary.stops.length} stops`} />
+          <Chip
+            icon={<PlaceIcon />}
+            data-testid="itinerary-stop-count"
+            label={`${itinerary.stops.length} stops`}
+          />
         </Stack>
       </Stack>
 
@@ -87,6 +94,8 @@ export function ItineraryPanel({
           <Card
             key={`${stop.external_id ?? stop.name}-${index}`}
             component="li"
+            data-testid="itinerary-stop"
+            data-selected={index === selectedIndex}
             sx={{
               borderColor: index === selectedIndex ? "primary.main" : undefined,
             }}

@@ -43,7 +43,9 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
+# Session scope so the integration suite can share one engine and one event
+# loop across a module; the unit suite creates its own engine per test anyway.
+asyncio_default_fixture_loop_scope = "session"
 testpaths = ["tests"]
 filterwarnings = ["error::DeprecationWarning:app.*"]
 

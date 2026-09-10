@@ -29,7 +29,7 @@ export interface ProgressStage {
 export function AgentProgress({ stages, visible }: { stages: ProgressStage[]; visible: boolean }) {
   return (
     <Collapse in={visible && stages.length > 0} unmountOnExit>
-      <Paper sx={{ p: { xs: 1.5, md: 2 } }} aria-live="polite">
+      <Paper sx={{ p: { xs: 1.5, md: 2 } }} aria-live="polite" data-testid="agent-progress">
         <Stack spacing={1}>
           {stages.map((stage) => (
             <Stack key={stage.id} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>

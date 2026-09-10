@@ -268,3 +268,7 @@ dist-lambda/
 # AgentCore local state
 services/agent/.bedrock_agentcore.yaml
 services/agent/.agentcore/
+
+# Playwright artifacts
+tests/e2e/test-results/
+tests/e2e/playwright-report/

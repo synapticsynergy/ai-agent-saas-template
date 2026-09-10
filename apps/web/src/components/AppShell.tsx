@@ -29,12 +29,21 @@ export function AppShell({
   return (
     <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
       <AppBar position="sticky">
-        <Toolbar sx={{ gap: 2 }}>
-          <MuiLink href="/planner" variant="h4" underline="none" sx={{ color: "inherit", mr: 1 }}>
+        <Toolbar sx={{ gap: { xs: 0.5, sm: 2 } }}>
+          {/* The brand collapses on a phone so navigation always fits. The
+              reference app is used while out; hiding the nav behind a
+              breakpoint would make saved plans unreachable there. */}
+          <MuiLink
+            href="/planner"
+            variant="h4"
+            underline="none"
+            noWrap
+            sx={{ color: "inherit", display: { xs: "none", sm: "block" }, mr: 1 }}
+          >
             Plan My Evening
           </MuiLink>
 
-          <Stack direction="row" spacing={1} sx={{ display: { xs: "none", sm: "flex" } }}>
+          <Stack direction="row" spacing={{ xs: 0, sm: 1 }}>
             <Button href="/planner" color="inherit">
               Planner
             </Button>
@@ -55,7 +64,7 @@ export function AppShell({
             <Chip
               variant="outlined"
               label={session.email || session.userId}
-              sx={{ maxWidth: { xs: 140, sm: 260 } }}
+              sx={{ display: { xs: "none", md: "inline-flex" }, maxWidth: 260 }}
             />
           </Tooltip>
 
