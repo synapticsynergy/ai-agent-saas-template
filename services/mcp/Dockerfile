@@ -13,19 +13,19 @@ ENV UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-WORKDIR /app
+WORKDIR /app/services/mcp
 
-COPY packages/contracts /packages/contracts
+COPY packages/contracts /app/packages/contracts
 COPY services/mcp/pyproject.toml services/mcp/uv.lock* ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project 2>/dev/null || uv sync --no-install-project
+    uv sync --no-install-project
 
 COPY services/mcp/ ./
 
 # ---------------------------------------------------------------------------
 FROM base AS dev
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/services/mcp/.venv/bin:$PATH"
 EXPOSE 8090
 CMD ["python", "server.py"]
 
@@ -33,7 +33,7 @@ CMD ["python", "server.py"]
 FROM base AS requirements
 
 RUN uv export --no-dev --no-hashes --no-emit-project --format requirements.txt \
-    > /tmp/requirements.txt
+    | grep -v '^-e ' > /tmp/requirements.txt
 
 # ---------------------------------------------------------------------------
 # Lambda container image. The MCP server is stateless HTTP, so it fits a Lambda

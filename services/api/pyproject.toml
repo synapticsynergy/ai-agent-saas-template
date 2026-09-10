@@ -26,6 +26,7 @@ saas-contracts = { path = "../../packages/contracts", editable = true }
 
 [dependency-groups]
 dev = [
+    "fastapi-cli>=0.0.13,<1.0",
     "pytest>=9.0,<10.0",
     "pytest-asyncio>=1.4,<2.0",
     "ruff>=0.16,<1.0",

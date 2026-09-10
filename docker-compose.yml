@@ -66,7 +66,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./services/api:/app
+      # Mount the source at the same path the image uses, and keep each
+      # container's own virtualenv: a bare bind mount would shadow it with the
+      # host's, whose interpreter symlinks point at the developer's machine.
+      - ./services/api:/app/services/api
+      - api-venv:/app/services/api/.venv
+      - ./packages/contracts:/app/packages/contracts:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,7 +95,9 @@ services:
     ports:
       - "8090:8090"
     volumes:
-      - ./services/mcp:/app
+      - ./services/mcp:/app/services/mcp
+      - mcp-venv:/app/services/mcp/.venv
+      - ./packages/contracts:/app/packages/contracts:ro
     depends_on:
       - api
 
@@ -110,7 +117,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./services/agent:/app
+      - ./services/agent:/app/services/agent
+      - agent-venv:/app/services/agent/.venv
+      - ./packages/contracts:/app/packages/contracts:ro
     depends_on:
       - mcp
 
@@ -139,5 +148,8 @@ services:
 
 volumes:
   postgres-data:
+  api-venv:
+  mcp-venv:
+  agent-venv:
   web-node-modules:
   web-next-cache:

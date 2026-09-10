@@ -1,0 +1,50 @@
+# Keeping the build context small matters for more than speed: without this,
+# a host virtualenv is copied into the image and overwrites the one built
+# inside it, leaving symlinks that point at the developer's machine.
+
+# Virtualenvs and Python caches
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/htmlcov/
+
+# Node
+**/node_modules/
+**/.pnpm-store/
+**/.next/
+**/out/
+**/*.tsbuildinfo
+
+# Test artifacts
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+**/.playwright/
+
+# Terraform: state and provider binaries are large and must never reach an image
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Version control and editor state
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+**/.DS_Store
+
+# Documentation and local infrastructure definitions are not needed at runtime
+docs/
+*.md
+!services/*/README.md
+docker-compose.yml

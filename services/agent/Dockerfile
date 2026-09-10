@@ -19,17 +19,16 @@ ENV UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-WORKDIR /app
+WORKDIR /app/services/agent
 
-COPY packages/contracts /packages/contracts
+COPY packages/contracts /app/packages/contracts
 COPY services/agent/pyproject.toml services/agent/uv.lock* ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev 2>/dev/null \
-    || uv sync --no-install-project --no-dev
+    uv sync --no-install-project --no-dev
 
 COPY services/agent/ ./
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/services/agent/.venv/bin:$PATH"
 
 # ---------------------------------------------------------------------------
 FROM base AS dev
