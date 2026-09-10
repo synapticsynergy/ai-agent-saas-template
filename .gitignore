@@ -8,19 +8,19 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+/build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
-var/
+/var/
 wheels/
-share/python-wheels/
+/share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -73,7 +73,7 @@ docs/_build/
 
 # PyBuilder
 .pybuilder/
-target/
+/target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -151,7 +151,7 @@ activemq-data/
 .env
 .envrc
 .venv
-env/
+/env/
 venv/
 ENV/
 env.bak/
@@ -222,3 +222,49 @@ __marimo__/
 
 # javascript
 node_modules/
+# ---------------------------------------------------------------------------
+# Project
+# ---------------------------------------------------------------------------
+
+# Node / Next.js
+.pnpm-store/
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+apps/web/.turbo/
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local environment files (only .env.example is committed)
+.env
+.env.*
+!.env.example
+
+# Local infrastructure volumes
+.localstack/
+.docker-data/
+
+# Build artifacts
+*.zip
+dist-lambda/
+
+# AgentCore local state
+services/agent/.bedrock_agentcore.yaml
+services/agent/.agentcore/

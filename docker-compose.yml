@@ -1,0 +1,143 @@
+# Local development topology.
+#
+#   make infra-up     → postgres + localstack only (recommended; run apps natively)
+#   docker compose up → everything, including the app services
+#
+# The agent service runs here as a plain ASGI container so `docker compose up`
+# yields a complete working stack without the AgentCore CLI installed. For work
+# that needs AgentCore Runtime parity (session headers, runtime lifecycle), run
+# `make agent-dev` instead — see docs/DEVELOPMENT.md.
+
+name: ai-agent-saas
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-app}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  localstack:
+    image: localstack/localstack:4
+    restart: unless-stopped
+    environment:
+      # Only the conventional AWS services the template actually uses.
+      # AgentCore is deliberately NOT emulated here — see docs/adr/ADR-004.
+      SERVICES: s3,dynamodb,lambda,apigateway,iam,logs,sts,ssm
+      DEBUG: "0"
+      PERSISTENCE: "0"
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./scripts/localstack:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app}
+      DATABASE_SYNC_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      API_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  mcp:
+    build:
+      context: .
+      dockerfile: services/mcp/Dockerfile
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8090"
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./services/mcp:/app
+    depends_on:
+      - api
+
+  agent:
+    build:
+      context: .
+      dockerfile: services/agent/Dockerfile
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      MCP_SERVER_URL: http://mcp:8090/mcp
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./services/agent:/app
+    depends_on:
+      - mcp
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      API_BASE_URL: http://api:8000
+      AGENT_BASE_URL: http://agent:8080
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app/apps/web
+      - web-node-modules:/app/apps/web/node_modules
+      - web-next-cache:/app/apps/web/.next
+    depends_on:
+      - api
+      - agent
+
+volumes:
+  postgres-data:
+  web-node-modules:
+  web-next-cache:
