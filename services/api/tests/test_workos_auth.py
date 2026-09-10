@@ -96,3 +96,36 @@ class TestClaimMapping:
     def test_no_role_and_no_permissions_grants_nothing(self) -> None:
         principal = workos.principal_from_claims({"sub": "u", "org_id": "o"})
         assert principal.permissions == frozenset()
+
+
+class TestDevFixtureToken:
+    """The fixture token must be inert unless both guards hold."""
+
+    def test_it_is_refused_when_the_fixture_is_disabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "auth_dev_fixture", False)
+        with pytest.raises(NotAuthenticated):
+            workos.dev_fixture_principal()
+
+    def test_it_is_refused_outside_a_local_app_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "auth_dev_fixture", True)
+        monkeypatch.setattr(settings, "app_env", "prod")
+        with pytest.raises(NotAuthenticated):
+            workos.dev_fixture_principal()
+
+    def test_it_resolves_locally_when_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "auth_dev_fixture", True)
+        monkeypatch.setattr(settings, "app_env", "local")
+
+        principal = workos.dev_fixture_principal()
+        assert principal.organization_id == settings.auth_dev_fixture_org_id
+        assert principal.has(PLANS_WRITE)

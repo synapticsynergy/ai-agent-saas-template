@@ -1,8 +1,10 @@
-"""Pure geospatial helpers.
+"""Geospatial helpers.
 
-No I/O, no configuration, no clock. Everything here is directly unit-testable,
-which is why route and budget reasoning lives in this module rather than inside
-a tool handler.
+Lives in the contracts package because the MCP server and the agent both need
+the same distance and travel-time arithmetic, and two independent copies would
+be free to drift into disagreeing about whether a plan is walkable.
+
+Pure functions: no I/O, no configuration, no clock.
 """
 
 from __future__ import annotations
@@ -15,6 +17,9 @@ EARTH_RADIUS_KM = 6371.0088
 WALKING_SPEED_KMH = 4.5
 TRANSIT_SPEED_KMH = 18.0
 DRIVING_SPEED_KMH = 30.0
+
+# Straight-line distance understates real street distance.
+STREET_DISTANCE_FACTOR = 1.25
 
 _SPEEDS = {
     "walk": WALKING_SPEED_KMH,
@@ -36,13 +41,11 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def travel_minutes(distance_km: float, mode: str = "walk") -> float:
     """Estimate travel time.
 
-    Straight-line distance understates real street distance, so it is inflated
-    by a routing factor. This is a deliberate approximation for the fixture
-    provider — a real routing provider replaces it behind the same interface.
+    A deliberate approximation for the fixture provider: a real routing
+    provider replaces it behind the same interface.
     """
-    street_factor = 1.25
     speed = _SPEEDS.get(mode, WALKING_SPEED_KMH)
-    return (distance_km * street_factor) / speed * 60
+    return (distance_km * STREET_DISTANCE_FACTOR) / speed * 60
 
 
 def within_radius(

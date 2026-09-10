@@ -11,7 +11,7 @@ from functools import lru_cache
 
 from mcp_server.config import settings
 from mcp_server.providers.base import EventsProvider, PlacesProvider, RouteProvider
-from mcp_server.providers.fixture import (
+from saas_contracts.fixtures import (
     FixtureEventsProvider,
     FixturePlacesProvider,
     FixtureRouteProvider,

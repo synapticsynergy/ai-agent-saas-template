@@ -19,6 +19,10 @@ async def get_principal(request: Request) -> Principal:
     scheme, _, token = header.partition(" ")
 
     if scheme.lower() == "bearer" and token:
+        # The fixture token is only ever accepted when both guards hold; the
+        # check lives in dev_fixture_principal() so it cannot drift from here.
+        if settings.auth_dev_fixture and token == settings.auth_dev_fixture_token:
+            return dev_fixture_principal()
         return principal_from_access_token(token)
 
     if settings.is_local and settings.auth_dev_fixture:

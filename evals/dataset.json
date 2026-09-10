@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "description": "Evaluation scenarios for the Plan My Evening reference agent.",
+  "cases": [
+    {
+      "id": "cheap_evening_live_music",
+      "input": "Plan a cheap evening with live music and food. Keep it under $80.",
+      "expectations": {
+        "uses_tools": ["search_places", "search_events"],
+        "includes_categories": ["dinner", "music"],
+        "max_total_cost": 80,
+        "min_stops": 2,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "walkable_date_night",
+      "input": "Walkable date night: dinner then drinks somewhere quiet. Under $120 for two.",
+      "expectations": {
+        "uses_tools": ["search_places", "build_route"],
+        "includes_categories": ["dinner", "drinks"],
+        "max_total_cost": 120,
+        "max_walk_km": 2.0,
+        "min_stops": 2,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "reference_request",
+      "input": "Plan my evening near me. I want dinner, live music, and drinks. Keep it walkable and under $100.",
+      "expectations": {
+        "uses_tools": ["search_places", "search_events", "build_route"],
+        "includes_categories": ["dinner", "music", "drinks"],
+        "max_total_cost": 100,
+        "max_walk_km": 2.0,
+        "min_stops": 3,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "replace_music_with_jazz",
+      "input": "Replace the live music with jazz.",
+      "follow_up_to": "reference_request",
+      "expectations": {
+        "uses_tools": ["search_events"],
+        "includes_categories": ["music"],
+        "music_genre": "jazz",
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "replan_under_tighter_budget",
+      "input": "Make it cheaper.",
+      "follow_up_to": "reference_request",
+      "expectations": {
+        "cheaper_than_previous": true,
+        "min_stops": 2,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "shorter_walk",
+      "input": "Keep it closer together, less walking.",
+      "follow_up_to": "reference_request",
+      "expectations": {
+        "shorter_walk_than_previous": true,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "solo_coffee_and_dessert",
+      "input": "Just coffee and dessert for one person tonight.",
+      "expectations": {
+        "uses_tools": ["search_places"],
+        "includes_categories": ["coffee", "dessert"],
+        "forbidden_categories": ["drinks"],
+        "min_stops": 2,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "group_arcade_night",
+      "input": "Arcade night with dinner for 4 people, under $200.",
+      "expectations": {
+        "uses_tools": ["search_places"],
+        "includes_categories": ["dinner", "activity"],
+        "max_total_cost": 200,
+        "min_stops": 2,
+        "itinerary_is_feasible": true
+      }
+    },
+    {
+      "id": "viewer_cannot_save",
+      "input": "Save this plan.",
+      "follow_up_to": "reference_request",
+      "principal_role": "viewer",
+      "expectations": {
+        "save_denied": true,
+        "forbidden_tools": [],
+        "authorization_respected": true
+      }
+    },
+    {
+      "id": "member_can_save",
+      "input": "Save this plan.",
+      "follow_up_to": "reference_request",
+      "principal_role": "member",
+      "expectations": {
+        "save_succeeds": true,
+        "authorization_respected": true
+      }
+    },
+    {
+      "id": "no_results_is_handled",
+      "input": "Plan an evening with dinner and drinks.",
+      "empty_providers": true,
+      "expectations": {
+        "min_stops": 0,
+        "no_hallucinated_stops": true,
+        "run_completes": true
+      }
+    }
+  ]
+}

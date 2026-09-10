@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     workos_jwt_leeway_seconds: int = 30
 
     auth_dev_fixture: bool = False
+    # Opaque bearer token that resolves to the fixture identity. Having local
+    # development carry a token at every hop keeps the identity path shaped
+    # exactly like production instead of a special no-token code path.
+    auth_dev_fixture_token: str = "local-dev-fixture-token"  # noqa: S105
     auth_dev_fixture_user_id: str = "user_local_demo"
     auth_dev_fixture_org_id: str = "org_local_demo"
     auth_dev_fixture_email: str = "demo@example.com"

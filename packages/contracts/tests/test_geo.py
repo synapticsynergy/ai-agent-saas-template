@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.geo import haversine_km, travel_minutes, within_radius
+from saas_contracts.geo import haversine_km, travel_minutes, within_radius
 
 
 class TestHaversine:

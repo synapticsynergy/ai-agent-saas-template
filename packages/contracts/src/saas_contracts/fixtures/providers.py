@@ -1,4 +1,9 @@
-"""Deterministic fixture providers.
+"""Deterministic reference dataset and providers.
+
+Lives in the contracts package rather than in services/mcp so that the MCP
+server, the agent's evaluation suite and the integration tests can all exercise
+the *same* data. (They cannot share a virtualenv: the Strands SDK pins mcp<2.2
+while the MCP server needs mcp>=2.2.)
 
 Used for local development and by every automated test. "Deterministic" is the
 point: results are a pure function of the query, so a test can assert on exact
@@ -20,9 +25,9 @@ from typing import Any
 
 from saas_contracts.tools import Event, Place, PlaceDetails, Route, RouteLeg
 
-from mcp_server.geo import haversine_km, travel_minutes
+from saas_contracts.geo import haversine_km, travel_minutes
 
-_FIXTURE_PATH = Path(__file__).parent / "fixtures.json"
+_FIXTURE_PATH = Path(__file__).parent / "data.json"
 
 # The dataset's own centre. Records are re-anchored relative to this point so
 # a request for any city gets a plausible, walkable local layout.

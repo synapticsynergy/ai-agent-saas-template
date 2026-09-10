@@ -287,9 +287,9 @@ def test_fixture_dataset_is_internally_consistent() -> None:
     import json
     from pathlib import Path
 
-    data = json.loads(
-        (Path(__file__).parent.parent / "mcp_server/providers/fixtures.json").read_text()
-    )
+    import saas_contracts.fixtures.providers as fixtures
+
+    data = json.loads((Path(fixtures.__file__).parent / "data.json").read_text())
     place_ids = {place["id"] for place in data["places"]}
 
     assert len(place_ids) == len(data["places"]), "duplicate place ids"

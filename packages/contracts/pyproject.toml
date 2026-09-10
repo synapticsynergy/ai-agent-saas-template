@@ -17,6 +17,10 @@ packages = ["src/saas_contracts"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/saas_contracts/py.typed" = "saas_contracts/py.typed"
+"src/saas_contracts/fixtures/data.json" = "saas_contracts/fixtures/data.json"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
