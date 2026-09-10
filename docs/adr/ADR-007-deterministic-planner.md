@@ -17,8 +17,10 @@ where they cannot be unit-tested and regress silently when a prompt changes.
 
 Split the run:
 
-- **The model interprets and explains.** It turns free text into a
-  `PlanningRequest` and narrates the finished plan.
+- **The model interprets.** A Strands agent on Bedrock turns free text into a
+  `PlanningRequest`, via structured output (`agent_app/interpreter.py`). It is
+  not allowed to choose the location or the clock; those are re-pinned from the
+  browser and the server after every call.
 - **Ordinary code plans.** `agent_app/workflows/planner.py` calls the tools,
   scores candidates, allocates budget across stops, orders and times them, and
   checks the route. No model involvement.

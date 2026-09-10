@@ -69,7 +69,11 @@ async def _events(payload: RunAgentInput, access_token: str | None) -> AsyncIter
     message = latest_user_message(payload)
 
     structlog.contextvars.bind_contextvars(run_id=context.run_id, thread_id=context.thread_id)
-    log.info("agent.run_started", has_identity=access_token is not None)
+    log.info(
+        "agent.run_started",
+        has_identity=access_token is not None,
+        interpreter=context.interpreter.name,
+    )
 
     async for event in run(message, context):
         yield event

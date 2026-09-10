@@ -24,9 +24,9 @@ from saas_contracts.plan import Itinerary
 from saas_contracts.streaming import ProgressStage
 
 from agent_app.config import settings
+from agent_app.interpreter import Interpreter, get_interpreter
 from agent_app.streaming import EventStream, new_id
 from agent_app.tools.mcp_client import McpToolClient, ToolCallError
-from agent_app.workflows.parse import parse_with_rules
 from agent_app.workflows.planner import PlannerTools, build_itinerary
 from agent_app.workflows.replan import change_music_genre, make_cheaper, tighten_walk
 from agent_app.workflows.request import PlanningRequest
@@ -49,6 +49,7 @@ class RunContext:
         itinerary: Itinerary | None = None,
         request: PlanningRequest | None = None,
         approved: bool = False,
+        interpreter: Interpreter | None = None,
     ) -> None:
         self.thread_id = thread_id
         self.run_id = run_id
@@ -61,6 +62,8 @@ class RunContext:
         # Set by the UI once the user confirms a consequential action. Intent
         # only — the API still checks permission.
         self.approved = approved
+        # Turns the user's words into constraints. Injected so tests can pin it.
+        self.interpreter = interpreter or get_interpreter()
 
 
 async def run(user_message: str, context: RunContext) -> AsyncIterator[BaseEvent]:
@@ -111,7 +114,7 @@ async def _plan(
         return
 
     yield stream.step_started(ProgressStage.LOCATING)
-    request, note = _resolve_request(user_message, context, intent)
+    request, note = await _resolve_request(user_message, context, intent)
     context.request = request
     yield stream.step_finished(ProgressStage.LOCATING)
 
@@ -248,11 +251,11 @@ def classify(message: str) -> Intent:
     return "plan"
 
 
-def _resolve_request(
+async def _resolve_request(
     user_message: str, context: RunContext, intent: Intent
 ) -> tuple[PlanningRequest, str]:
     """Produce the constraints for this run, plus a note explaining any change."""
-    parsed = parse_with_rules(
+    parsed = await context.interpreter.interpret(
         user_message,
         latitude=context.latitude,
         longitude=context.longitude,

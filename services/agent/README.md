@@ -7,10 +7,25 @@ reference "Plan My Evening" workflow.
 
 | Concern | Where it lives | Why |
 |---|---|---|
-| Interpreting the request | model (or `parse.py` rules) | Language understanding is what a model is for. |
+| Interpreting the request | `interpreter.py` — Strands on Bedrock | Language understanding is what a model is for. |
 | Choosing venues, timing, budget | `workflows/planner.py` | Deterministic, testable, auditable. |
 | Reaching tools | `tools/mcp_client.py` over MCP | Portable capability boundary (ADR-003). |
 | Deciding if a write is allowed | the application API | The model is not a security boundary. |
+
+## The model's job
+
+Exactly one thing: turn a sentence into a `PlanningRequest`. It is asked for
+structured output, so a malformed answer fails at the schema boundary rather
+than becoming a strange itinerary.
+
+Two things it is deliberately not allowed to decide, and which are re-pinned
+after every call whatever it returns:
+
+- **where the user is** — that comes from the browser,
+- **what time it is** — that comes from the server.
+
+A model failure degrades to rule-based extraction rather than failing the run,
+so a Bedrock outage costs understanding, not availability.
 
 The planner is deliberately model-free. That is not a limitation — it is the
 template's central principle applied to the agent itself: keep the
@@ -27,8 +42,9 @@ Uses the AgentCore CLI when it is installed (`uv tool install
 bedrock-agentcore-starter-toolkit`), which reproduces the AgentCore Runtime
 contract. Falls back to uvicorn otherwise, serving the identical app.
 
-Without AWS credentials, set `AGENT_MODEL_PROVIDER=scripted` to skip model
-inference and use rule-based request parsing. This is refused outside
+Without AWS credentials, set `AGENT_MODEL_PROVIDER=scripted`. Interpretation
+then uses rule-based extraction; everything else — the planner, the tools, the
+streaming and the whole authorization path — is unchanged. Refused outside
 `APP_ENV=local`.
 
 ## HTTP contract

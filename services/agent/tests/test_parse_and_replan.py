@@ -201,3 +201,76 @@ class TestOtherRevisions:
 def test_default_start_time_is_in_the_future() -> None:
     request = parse_with_rules("dinner", latitude=LAT, longitude=LON)
     assert request.start_time > datetime.now(UTC)
+
+
+class TestInterpreterSelection:
+    """The configured provider must actually take effect.
+
+    A configuration flag that silently does nothing is worse than no flag: it
+    reads as implemented in code review and as broken in production.
+    """
+
+    def test_scripted_selects_the_rule_interpreter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_app import interpreter as module
+        from agent_app.config import settings
+
+        monkeypatch.setattr(settings, "agent_model_provider", "scripted")
+        assert module.get_interpreter().name == "rules"
+
+    def test_bedrock_selects_the_bedrock_interpreter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_app import interpreter as module
+        from agent_app.config import settings
+
+        monkeypatch.setattr(settings, "agent_model_provider", "bedrock")
+        assert module.get_interpreter().name == "bedrock"
+
+    async def test_the_rule_interpreter_matches_direct_parsing(self) -> None:
+        from agent_app.interpreter import RuleInterpreter
+
+        result = await RuleInterpreter().interpret(
+            REFERENCE_REQUEST, latitude=LAT, longitude=LON, start_time=TONIGHT
+        )
+        assert result.model_dump() == parse(REFERENCE_REQUEST).model_dump()
+
+    async def test_a_model_failure_degrades_to_rules(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A Bedrock outage must cost understanding, not availability."""
+        from agent_app.interpreter import BedrockInterpreter
+
+        class ExplodingAgent:
+            async def structured_output_async(self, *_: object, **__: object) -> None:
+                raise RuntimeError("bedrock unavailable")
+
+        interpreter = BedrockInterpreter()
+        monkeypatch.setattr(interpreter, "_build", lambda: ExplodingAgent())
+
+        result = await interpreter.interpret(
+            REFERENCE_REQUEST, latitude=LAT, longitude=LON, start_time=TONIGHT
+        )
+        assert result.budget == 100.0
+        assert result.categories == ["dinner", "music", "drinks"]
+
+    async def test_the_model_cannot_move_the_user(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Location and clock come from the server, whatever the model returns."""
+        from agent_app.interpreter import BedrockInterpreter
+        from agent_app.workflows.request import PlanningRequest
+
+        class WanderingAgent:
+            async def structured_output_async(self, *_: object, **__: object) -> PlanningRequest:
+                return PlanningRequest(
+                    latitude=1.0,
+                    longitude=2.0,
+                    start_time=datetime(1999, 1, 1, tzinfo=UTC),
+                    categories=["dinner"],
+                )
+
+        interpreter = BedrockInterpreter()
+        monkeypatch.setattr(interpreter, "_build", lambda: WanderingAgent())
+
+        result = await interpreter.interpret(
+            "dinner", latitude=LAT, longitude=LON, start_time=TONIGHT
+        )
+        assert result.latitude == LAT
+        assert result.longitude == LON
+        assert result.start_time == TONIGHT
+        # What the model *is* allowed to decide survives.
+        assert result.categories == ["dinner"]
