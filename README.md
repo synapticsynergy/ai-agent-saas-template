@@ -382,6 +382,9 @@ Out of the box this runs **without any cloud credentials**:
 To use the real services, set `WORKOS_*`, `AGENT_MODEL_PROVIDER=bedrock` and the
 provider credentials in `.env`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+`make dev` runs all four in one terminal; **Ctrl-C stops them all**. If a server
+is ever left holding a port, `make dev-stop` reclaims them.
+
 ### Individual services
 
 ```bash

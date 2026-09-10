@@ -80,6 +80,10 @@ env: ## Create .env from .env.example if it does not exist
 dev: ## Run web + api + agent + mcp together (Ctrl-C stops all)
 	@./scripts/dev.sh
 
+.PHONY: dev-stop
+dev-stop: ## Free the development ports if a server was left running
+	@./scripts/dev-stop.sh
+
 .PHONY: web-dev
 web-dev: ## Run the Next.js app on :3000
 	$(PNPM) --filter web dev

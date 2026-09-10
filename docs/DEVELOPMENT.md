@@ -269,7 +269,17 @@ For convenience:
 make dev
 ```
 
-should start or coordinate the common processes.
+starts all four in one terminal, prefixing each line with its service name.
+**Ctrl-C stops everything** — the script puts each service in its own process
+group so the signal reaches the whole tree (make → uv → uvicorn/next), not just
+the wrapper.
+
+If a server is ever left holding a port — a hard `kill -9`, a crashed terminal —
+reclaim them with:
+
+```bash
+make dev-stop
+```
 
 ---
 
