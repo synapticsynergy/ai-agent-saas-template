@@ -152,20 +152,38 @@ Do not use MCP Apps for every UI component. Normal product UI remains normal Nex
 
 ## Identity propagation
 
+Identity travels as the WorkOS **access token** — a signed JWT — and every hop
+verifies it independently rather than trusting the hop before it.
+
 ```text
-WorkOS session
-    ↓
-trusted server context
-    ├── user_id
-    ├── organization_id
-    └── permissions
-          ↓
-     agent request
-          ↓
-        tools
+Browser                    (holds a session cookie; never a bearer token)
+  ↓
+Next.js server             verifies the WorkOS session
+  ↓  Authorization: Bearer <jwt>
+Agent runtime              forwards the assertion unchanged
+  ↓  Authorization: Bearer <jwt>
+MCP server                 forwards the assertion unchanged
+  ↓  Authorization: Bearer <jwt>
+FastAPI                    verifies the signature against WorkOS JWKS,
+                           derives user_id / organization_id / permissions,
+                           and authorizes
 ```
 
-Never allow the LLM to invent or override `organization_id`, `user_id`, or permission claims.
+Two properties fall out of this shape:
+
+- **No hop can forge a tenant.** The API derives `organization_id` from a
+  signature it verified, not from anything a caller sent.
+- **The agent holds no credential of its own.** It acts strictly on behalf of
+  the authenticated user, so it can never exceed that user's access.
+
+The browser never holds the token. It is attached server-side, in the CopilotKit
+runtime route (`apps/web/src/app/api/copilotkit/[[...path]]/route.ts`), which is
+the identity injection boundary.
+
+Never allow the LLM to invent or override `organization_id`, `user_id`, or
+permission claims. In this implementation it structurally cannot: the create and
+update schemas have no such fields, so an invented value is dropped at
+validation.
 
 ## Enforcement
 

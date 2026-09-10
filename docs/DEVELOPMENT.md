@@ -16,43 +16,52 @@ Task runner              Make
 
 ## Environment Files
 
-Suggested:
-
-```text
-.env.example
-.env.local
-.env.test
-```
-
-Never commit actual secrets.
-
-Example variables:
+One `.env` at the repository root configures every service:
 
 ```bash
-APP_ENV=local
-
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-API_BASE_URL=http://localhost:8000
-
-WORKOS_API_KEY=
-WORKOS_CLIENT_ID=
-WORKOS_COOKIE_PASSWORD=
-
-AWS_REGION=us-west-2
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-AWS_ENDPOINT_URL=http://localhost:4566
-
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app
-
-AGENTCORE_ENDPOINT=
-BEDROCK_MODEL_ID=
-
-MAPS_API_KEY=
-EVENTS_API_KEY=
+cp .env.example .env
 ```
 
-Use provider-specific secret management for cloud environments.
+The API, agent and MCP server read it through pydantic-settings. The Next.js app
+reads it too — `next.config.ts` loads the root file explicitly, because Next only
+looks in its own directory by default.
+
+Values already present in the environment win, so a shell override or a
+container's `env_file` still takes precedence.
+
+Never commit actual secrets. `.env` is git-ignored; only `.env.example` is
+tracked.
+
+Variables are grouped by concern in `.env.example`: APP, WORKOS, AWS, DATABASE,
+AGENTCORE, BEDROCK, MCP, MAPS, and the event/place providers.
+
+Important ones:
+
+| Variable | Notes |
+|---|---|
+| `APP_ENV` | `local`, `dev`, `staging` or `prod`. Several safety guards key off it. |
+| `AUTH_DEV_FIXTURE` | `1` uses a deterministic local identity instead of WorkOS. Refused unless `APP_ENV=local`. |
+| `AGENT_MODEL_PROVIDER` | `bedrock` or `scripted`. `scripted` skips model inference; refused unless `APP_ENV=local`. |
+| `PLACES_PROVIDER` / `EVENTS_PROVIDER` | `fixture` (deterministic dataset) or `http` (a real provider). |
+| `AWS_ENDPOINT_URL` | Points the AWS SDK at LocalStack. Must be **empty** in deployed environments — the API refuses to start otherwise. |
+| `DATABASE_URL` / `DATABASE_SYNC_URL` | asyncpg for the application, psycopg for Alembic. |
+
+### Startup validation
+
+Configuration is validated eagerly, so a misconfigured deployment fails at
+startup with a readable error rather than at the first request that needs the
+value. For example, with `APP_ENV=staging` and no WorkOS configuration:
+
+```text
+Invalid API configuration:
+  APP_ENV=staging requires these variables to be set: WORKOS_API_KEY, WORKOS_CLIENT_ID
+```
+
+### Cloud environments
+
+Do not use a `.env` file. Terraform writes the database connection strings to
+Secrets Manager, and the Lambda functions read configuration from their
+environment. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
@@ -288,10 +297,10 @@ Goals:
 Build all:
 
 ```bash
-docker compose build
+make build          # docker compose build
 ```
 
-Run:
+Run everything in containers:
 
 ```bash
 docker compose up
@@ -304,6 +313,16 @@ docker compose build api
 docker compose up -d api
 ```
 
+The recommended local loop is different from either: `make infra-up` runs only
+Postgres and LocalStack in containers, and `make dev` runs the application
+services natively. Native processes restart faster and attach to a debugger more
+easily; the Dockerfiles exist for CI parity, container deployment and for
+reproducing a dependency problem that only appears in an image.
+
+The agent is included in Compose so `docker compose up` yields a complete
+working stack without the AgentCore CLI installed. For work that needs AgentCore
+Runtime parity, use `make agent-dev` instead.
+
 ---
 
 # Database Migrations
@@ -315,10 +334,13 @@ For SQLAlchemy projects, Alembic is a conventional choice.
 Commands:
 
 ```bash
-make db-migration NAME="add plans table"
-make db-migrate
-make db-rollback
+make db-migration NAME="add plans table"   # autogenerate a revision
+make db-migrate                            # apply to head
+make db-rollback                           # step back one revision
 ```
+
+Migrations use the synchronous driver (`DATABASE_SYNC_URL`) while the
+application uses asyncpg, so deploy tooling never needs an event loop.
 
 Do not apply production schema changes from developer laptops.
 

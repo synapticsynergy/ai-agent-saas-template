@@ -19,24 +19,26 @@ Never share databases, buckets, secrets, or auth configuration across prod and n
 
 # Terraform Layout
 
-Recommended:
-
 ```text
 infra/terraform/
 ├── modules/
-│   ├── api/
-│   ├── database/
-│   ├── storage/
-│   ├── networking/
-│   └── observability/
+│   ├── networking/     VPC, subnets, security groups
+│   ├── database/       RDS Postgres, credentials in Secrets Manager
+│   ├── storage/        S3, optional DynamoDB
+│   ├── api/            ECR, Lambda, HTTP API Gateway, IAM
+│   ├── mcp/            ECR, Lambda, Function URL, IAM
+│   └── observability/  alarms, metric filters, dashboard
 └── envs/
-    ├── local/
+    ├── local/          LocalStack; only the services it reproduces well
     ├── dev/
     ├── staging/
     └── prod/
 ```
 
-Each environment composes shared modules.
+Each environment composes the shared modules and supplies its own sizing.
+Production variables carry `validation` blocks that refuse a CORS wildcard,
+single-AZ, a backup window under seven days, or deletion protection turned off —
+so a dangerous configuration fails at plan time rather than in review.
 
 Example:
 
@@ -55,7 +57,7 @@ Do not use the same state file for staging and production.
 
 # What Terraform Owns
 
-Terraform should own conventional AWS infrastructure:
+Terraform owns conventional AWS infrastructure:
 
 - API Gateway,
 - Lambda,
@@ -67,44 +69,69 @@ Terraform should own conventional AWS infrastructure:
 - DNS where appropriate,
 - environment-specific outputs.
 
-AgentCore infrastructure may be provisioned by the current supported AgentCore deployment tooling or Terraform where stable provider support exists for the exact resource. Avoid forcing one IaC tool to own a resource if the platform's supported deployment path is materially better.
+## What Terraform does not own
 
-Document ownership explicitly so resources are not managed by two deployment systems.
+**Application image tags.** Terraform creates the Lambda functions and ignores
+`image_uri` thereafter. `make api-deploy` builds an immutable image, pushes it
+and repoints the function. A release is therefore not an infrastructure change:
+`terraform plan` stays free of churn from ordinary deploys, and rollback is
+"point at the previous tag".
+
+**AgentCore Runtime.** Owned by the AgentCore CLI. Terraform outputs the API
+URL, MCP endpoint and bucket name; `scripts/deploy/agent.sh` reads them and
+passes them to `agentcore deploy`. See
+[ADR-006](adr/ADR-006-agentcore-owns-its-own-resources.md).
+
+**The web host.** Deliberately unchosen — Next.js deploys well to several
+places and the right answer depends on the product. `scripts/deploy/web.sh`
+fails with instructions until `WEB_DEPLOY_COMMAND` is configured, rather than
+silently doing nothing.
+
+One system owns each resource. Two systems owning one resource is not a
+theoretical concern: it surfaced immediately while building this template, as a
+"table already exists" error when the local Terraform environment and the
+Compose bootstrap both tried to create the same DynamoDB table.
 
 ---
 
 # AgentCore Deployment
 
-Typical agent workflow:
-
-```bash
-cd services/agent
-
-agentcore deploy --dry-run
-agentcore deploy
-agentcore status
-agentcore invoke --prompt "smoke test"
-```
-
-Keep agent deployment commands wrapped by Make/CI:
-
 ```bash
 make agent-deploy ENV=staging
 ```
 
-AgentCore deployment and Terraform deployment should exchange outputs through environment configuration/CI rather than hidden manual steps.
+`scripts/deploy/agent.sh` reads the Terraform outputs for that environment,
+exports them, and runs `agentcore configure` then `agentcore deploy --dry-run`
+then `agentcore deploy`. The handoff between the two systems is explicit and in
+version control, not a manual step somebody remembers.
+
+It requires the AgentCore CLI and fails with an install hint when it is missing:
+
+```bash
+uv tool install bedrock-agentcore-starter-toolkit
+```
 
 ---
 
 # Environment Configuration
 
-Suggested secret/config naming:
+Terraform creates the database credential itself — a generated password stored
+in Secrets Manager at `/<project>/<environment>/database-url`. It is never a
+Terraform variable, so it cannot end up in a tfvars file, a shell history or a
+CI log.
 
 ```text
-/ai-agent-saas/dev/...
-/ai-agent-saas/staging/...
-/ai-agent-saas/prod/...
+/ai-agent-saas/dev/database-url
+/ai-agent-saas/staging/database-url
+/ai-agent-saas/prod/database-url
 ```
+
+The API's Lambda role can read exactly that one secret, and nothing else.
+
+`WORKOS_CLIENT_ID` is passed as plain configuration, deliberately: it only
+identifies which JWKS to verify access tokens against. The **API key is never
+given to the API** — it verifies tokens rather than calling WorkOS, so it does
+not need one.
 
 Never reuse WorkOS production credentials locally.
 
@@ -272,33 +299,36 @@ Avoid schema changes that require all services to switch atomically.
 
 # CI/CD Mapping
 
-Recommended GitHub Actions:
-
 ```text
-ci.yml
-  pull requests
-  lint/typecheck/tests/terraform validate
-
-deploy-dev.yml
-  push to dev
-
-deploy-staging.yml
-  push to staging
-
-deploy-prod.yml
-  push to main
-  protected environment approval
+.github/workflows/
+├── ci.yml              every PR and push: lint, types, unit, contracts-in-sync,
+│                       terraform fmt/validate, integration; evals and E2E when
+│                       targeting staging or main
+├── deploy.yml          reusable pipeline, called by the three below
+├── deploy-dev.yml      push to dev
+├── deploy-staging.yml  push to staging, then staging-check
+└── deploy-prod.yml     push to main, behind the protected environment
 ```
 
-Use GitHub Environments:
+## Credentials
 
-```text
-development
-staging
-production
-```
+Deploys assume a role via GitHub OIDC. There are no long-lived AWS access keys
+in GitHub secrets.
 
-Store only environment-specific deployment secrets in the associated protected environment.
+Per environment, configure:
+
+| Kind | Name | Purpose |
+|---|---|---|
+| secret | `AWS_DEPLOY_ROLE_ARN` | role assumed via OIDC |
+| secret | `TF_STATE_BUCKET` | remote state bucket |
+| secret | `TF_LOCK_TABLE` | state lock table |
+| secret | `WORKOS_CLIENT_ID` | that environment's WorkOS client |
+| variable | `AWS_REGION`, `CORS_ORIGINS`, `APP_URL` | non-sensitive configuration |
+| variable | `WEB_DEPLOY_COMMAND` | your web host's deploy command |
+
+Use GitHub Environments named `dev`, `staging` and `production`, and put
+required reviewers on `production` — `deploy.yml` runs `terraform plan` before
+the gate, so a human sees the plan before the apply.
 
 ---
 

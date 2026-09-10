@@ -179,41 +179,57 @@ Normal application UI should remain normal Next.js components where MCP Apps do 
 
 # Human Approval
 
-Use approval for consequential or user-commitment actions.
+Approval is requested for consequential actions and not for harmless ones.
+Searching places needs no approval; saving a plan does.
 
-Example:
+When the user asks to save, the agent emits an AG-UI custom event and stops:
 
-```text
-I found a ticketed show for $28 that fits the plan.
-
-[ Skip ] [ Add to plan ]
+```json
+{"type":"CUSTOM","name":"approval_requested",
+ "value":{"action":"save_plan",
+          "detail":{"title":"Dinner and live music","estimated_cost":90,"stop_count":3}}}
 ```
 
-Do not require approval for harmless discovery operations such as searching places.
+The UI renders a dialog. Confirming re-sends the request with
+`forwardedProps.approved = true`, and only then does the agent call `save_plan`.
 
-Approval does not replace authorization. The backend still verifies the authenticated user's permission before executing protected actions.
+**Approval is not authorization.** The dialog says so, and the system enforces
+it: an approved save still goes agent → MCP → API, and the API checks
+`plans:write` against the verified token. A viewer can approve their own save
+all day and never write a plan — the agent explains the refusal rather than
+retrying.
+
+This is covered deterministically at three layers: `tests/test_save_plan.py`
+(MCP), `test_plan_service.py` (API), and the `viewer_cannot_save` eval case.
 
 ---
 
 # Persistence
 
-Minimum domain model:
+Domain model:
 
 ```text
-plans
-plan_stops
-user_preferences
-agent_runs
-agent_tool_calls
+plans              organization_id, created_by_user_id, title, status,
+                   start_time, estimated_cost, estimated_walk_distance_km,
+                   agent_run_id
+plan_stops         plan_id, position, name, category, start/end_time,
+                   latitude, longitude, estimated_cost, reason
+user_preferences   organization_id, user_id, default_budget, max_walk_km
+agent_runs         organization_id, user_id, model, status, latency,
+                   tokens, estimated_cost, trace_id
+agent_tool_calls   run_id, tool_name, status, latency, idempotency_key, error
 ```
 
-Every tenant-owned record includes:
+Every tenant-owned record includes `organization_id`, indexed, and supplied by
+the service layer from the verified principal — never from request input.
 
-```text
-organization_id
-```
+`plan_stops.reason` carries the agent's justification for each choice, so a
+saved plan explains itself without re-running anything.
 
-A saved plan should be retrievable through the deterministic FastAPI application API independently of the agent.
+A saved plan is retrievable through the FastAPI application API with no agent
+involved: `GET /plans` and `GET /plans/{id}`, scoped to the caller's
+organization. A request for another organization's plan returns 404, not 403 —
+a 403 would confirm the id exists.
 
 ---
 
