@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from ag_ui.core import BaseEvent, EventType
+from ag_ui.core import BaseEvent, EventType, TextMessageContentEvent
 from saas_contracts.plan import Itinerary, PlanStopCreate
 
 from agent_app.runner import RunContext, run
@@ -77,6 +77,11 @@ async def collect(message: str, context: RunContext) -> list[BaseEvent]:
 
 def types_of(events: list[BaseEvent]) -> list[EventType]:
     return [event.type for event in events]
+
+
+def assistant_text(events: list[BaseEvent]) -> str:
+    """Reassemble the assistant's message from its streamed deltas."""
+    return "".join(e.delta for e in events if isinstance(e, TextMessageContentEvent))
 
 
 def saved_itinerary() -> Itinerary:
@@ -248,11 +253,7 @@ class TestSaveApproval:
         context = make_context(itinerary=saved_itinerary(), approved=True)
 
         events = await collect("Save this plan.", context)
-        text = "".join(
-            e.delta
-            for e in events
-            if e.type == EventType.TEXT_MESSAGE_CONTENT  # type: ignore[attr-defined]
-        )
+        text = assistant_text(events)
 
         assert "permission" in text.lower()
         assert context.itinerary is not None
@@ -263,11 +264,7 @@ class TestSaveApproval:
         client = patch_client(StubMcpClient())
         events = await collect("Save this plan.", make_context(approved=True))
 
-        text = "".join(
-            e.delta
-            for e in events
-            if e.type == EventType.TEXT_MESSAGE_CONTENT  # type: ignore[attr-defined]
-        )
+        text = assistant_text(events)
         assert "no itinerary" in text.lower()
         assert not client.called("save_plan")
 

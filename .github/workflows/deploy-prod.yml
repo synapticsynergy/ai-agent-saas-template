@@ -1,0 +1,60 @@
+name: Deploy production
+
+# Production deploys only from `main`, and only after the `production` GitHub
+# Environment's protection rules release them. Configure that environment with
+# required reviewers — this workflow assumes a human sees the plan before the
+# apply runs.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "deploy production" to proceed
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to push the release tag
+  id-token: write
+
+jobs:
+  guard:
+    name: Confirm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the manual confirmation
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ inputs.confirm }}" != "deploy production" ]; then
+            echo "::error::Confirmation text did not match."
+            exit 1
+          fi
+
+  deploy:
+    needs: guard
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: prod
+    secrets: inherit
+
+  tag:
+    name: Tag the release
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Create a release tag
+        run: |
+          TAG="release-$(date -u +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)"
+          git tag -a "$TAG" -m "Production release $TAG"
+          git push origin "$TAG"
+          echo "Tagged $TAG"

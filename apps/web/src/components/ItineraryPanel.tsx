@@ -64,7 +64,7 @@ export function ItineraryPanel({
           sx={{ alignItems: "center", flexWrap: "wrap" }}
         >
           <Typography variant="h3">{itinerary.title || "Your evening"}</Typography>
-            {itinerary.saved ? (
+          {itinerary.saved ? (
             <Chip color="success" data-testid="itinerary-saved" label="Saved" />
           ) : null}
         </Stack>

@@ -14,11 +14,20 @@ from app.config import Settings
 
 
 def _settings(**overrides: object) -> Settings:
+    """Build Settings from explicit values only.
+
+    ``_env_file=None`` detaches from the repository's .env and the ambient
+    environment, so these tests assert on the validation rules rather than on
+    whatever the developer happens to have configured locally.
+    """
     base: dict[str, object] = {
+        "_env_file": None,
         "app_env": "local",
+        "auth_dev_fixture": False,
         "workos_api_key": "",
         "workos_client_id": "",
         "aws_endpoint_url": "",
+        "api_cors_origins": "http://localhost:3000",
     }
     base.update(overrides)
     return Settings(**base)  # type: ignore[arg-type]

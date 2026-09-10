@@ -11,6 +11,7 @@ WEB      := apps/web
 API      := services/api
 AGENT    := services/agent
 MCP      := services/mcp
+CONTRACTS := packages/contracts
 TERRAFORM_DIR := infra/terraform
 
 PNPM := pnpm
@@ -135,6 +136,19 @@ db-migration: ## Create a migration: make db-migration NAME="add plans table"
 	@if [ -z "$(NAME)" ]; then echo 'ERROR: NAME is required. Example: make db-migration NAME="add plans table"'; exit 1; fi
 	cd $(API) && $(UV) run alembic revision --autogenerate -m "$(NAME)"
 
+.PHONY: contracts
+contracts: ## Regenerate shared JSON Schema and TypeScript from the Pydantic contracts
+	$(UV) run --project packages/contracts python packages/contracts/generate.py
+
+.PHONY: contracts-check
+contracts-check: ## Fail if the generated contracts are stale
+	@$(MAKE) --no-print-directory contracts
+	@if ! git diff --quiet -- packages/contracts/generated; then \
+		echo "ERROR: generated contracts are stale. Run 'make contracts' and commit the result."; \
+		git --no-pager diff --stat -- packages/contracts/generated; \
+		exit 1; \
+	fi
+
 .PHONY: seed
 seed: ## Load deterministic demo data into the local database
 	cd $(API) && $(UV) run python -m app.seed
@@ -145,30 +159,32 @@ seed: ## Load deterministic demo data into the local database
 
 .PHONY: format
 format: ## Format all code
-	$(UV) run --project $(API) ruff format $(API)
-	$(UV) run --project $(AGENT) ruff format $(AGENT)
-	$(UV) run --project $(MCP) ruff format $(MCP) evals tests
+	$(UV) run --project $(API) ruff format $(API) $(CONTRACTS)
+	$(UV) run --project $(MCP) ruff format $(MCP)
+	$(UV) run --project $(AGENT) ruff format $(AGENT) evals tests
 	$(PNPM) --filter web format
 
 .PHONY: format-check
 format-check: ## Verify formatting without writing changes
-	$(UV) run --project $(API) ruff format --check $(API)
-	$(UV) run --project $(AGENT) ruff format --check $(AGENT)
-	$(UV) run --project $(MCP) ruff format --check $(MCP) evals tests
+	$(UV) run --project $(API) ruff format --check $(API) $(CONTRACTS)
+	$(UV) run --project $(MCP) ruff format --check $(MCP)
+	$(UV) run --project $(AGENT) ruff format --check $(AGENT) evals tests
+	$(PNPM) --filter web exec prettier --check "src/**/*.{ts,tsx}"
 
 .PHONY: lint
 lint: ## Lint Python and TypeScript
-	$(UV) run --project $(API) ruff check $(API)
-	$(UV) run --project $(AGENT) ruff check $(AGENT)
-	$(UV) run --project $(MCP) ruff check $(MCP) evals tests
+	$(UV) run --project $(API) ruff check $(API) $(CONTRACTS)
+	$(UV) run --project $(MCP) ruff check $(MCP)
+	$(UV) run --project $(AGENT) ruff check $(AGENT) evals tests
 	$(PNPM) --filter web lint
 
 .PHONY: typecheck
 typecheck: ## Type-check Python and TypeScript
-	$(UV) run --project $(API) mypy app
-	$(UV) run --project $(AGENT) mypy .
-	$(UV) run --project $(MCP) mypy .
+	$(UV) run --project $(API) mypy $(API)/app
+	$(UV) run --project $(MCP) mypy $(MCP)
+	$(UV) run --project $(AGENT) mypy $(AGENT)
 	$(PNPM) --filter web typecheck
+	$(PNPM) --filter e2e typecheck
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -176,6 +192,7 @@ typecheck: ## Type-check Python and TypeScript
 
 .PHONY: test-unit
 test-unit: ## Unit + service + tool-contract tests (no external infrastructure)
+	$(UV) run --project $(CONTRACTS) pytest $(CONTRACTS)/tests -q
 	$(UV) run --project $(API) pytest $(API)/tests -q
 	$(UV) run --project $(MCP) pytest $(MCP)/tests -q
 	$(UV) run --project $(AGENT) pytest $(AGENT)/tests -q
@@ -188,7 +205,12 @@ test-integration: ## Integration tests against local Postgres + LocalStack + MCP
 
 .PHONY: test-e2e
 test-e2e: ## Playwright end-to-end tests against the local stack
+	@./scripts/require-stack.sh
 	$(PNPM) --filter e2e test
+
+.PHONY: e2e-install
+e2e-install: ## Install the Playwright browsers
+	$(PNPM) --filter e2e exec playwright install --with-deps chromium
 
 .PHONY: eval
 eval: ## Run the agent evaluation suite
@@ -198,7 +220,7 @@ eval: ## Run the agent evaluation suite
 test: test-unit test-integration test-e2e ## Full local test suite
 
 .PHONY: check
-check: format-check lint typecheck test-unit terraform-fmt terraform-validate ## Fast pre-push suite
+check: format-check lint typecheck contracts-check test-unit terraform-fmt terraform-validate ## Fast pre-push suite
 
 # ---------------------------------------------------------------------------
 # Terraform

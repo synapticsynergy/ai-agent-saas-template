@@ -110,9 +110,7 @@ class TestDevFixtureToken:
         with pytest.raises(NotAuthenticated):
             workos.dev_fixture_principal()
 
-    def test_it_is_refused_outside_a_local_app_env(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_it_is_refused_outside_a_local_app_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.config import settings
 
         monkeypatch.setattr(settings, "auth_dev_fixture", True)

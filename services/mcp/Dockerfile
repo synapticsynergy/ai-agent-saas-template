@@ -44,8 +44,7 @@ COPY --from=requirements /tmp/requirements.txt /tmp/requirements.txt
 COPY packages/contracts /tmp/contracts
 
 RUN pip install --no-cache-dir --target "${LAMBDA_TASK_ROOT}" -r /tmp/requirements.txt \
- && pip install --no-cache-dir --target "${LAMBDA_TASK_ROOT}" /tmp/contracts \
- && pip install --no-cache-dir --target "${LAMBDA_TASK_ROOT}" mangum
+ && pip install --no-cache-dir --target "${LAMBDA_TASK_ROOT}" /tmp/contracts
 
 COPY services/mcp/mcp_server "${LAMBDA_TASK_ROOT}/mcp_server"
 COPY services/mcp/lambda_handler.py "${LAMBDA_TASK_ROOT}/"

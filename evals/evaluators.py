@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from itertools import pairwise
 from typing import Any
 
 from saas_contracts.plan import Itinerary
@@ -65,17 +66,25 @@ def uses_tools(record: RunRecord, expected: list[str]) -> Score:
     return Score(
         "uses_tools",
         not missing,
-        f"missing: {missing}" if missing else f"called: {sorted(set(record.tools_called))}",
+        f"missing: {missing}"
+        if missing
+        else f"called: {sorted(set(record.tools_called))}",
     )
 
 
 def forbidden_tools(record: RunRecord, forbidden: list[str]) -> Score:
     used = [tool for tool in forbidden if tool in record.tools_called]
-    return Score("forbidden_tools", not used, f"used forbidden: {used}" if used else "none used")
+    return Score(
+        "forbidden_tools", not used, f"used forbidden: {used}" if used else "none used"
+    )
 
 
 def includes_categories(record: RunRecord, expected: list[str]) -> Score:
-    present = {stop.category for stop in record.itinerary.stops} if record.itinerary else set()
+    present = (
+        {stop.category for stop in record.itinerary.stops}
+        if record.itinerary
+        else set()
+    )
     missing = [category for category in expected if category not in present]
     return Score(
         "includes_categories",
@@ -85,9 +94,15 @@ def includes_categories(record: RunRecord, expected: list[str]) -> Score:
 
 
 def forbidden_categories(record: RunRecord, forbidden: list[str]) -> Score:
-    present = {stop.category for stop in record.itinerary.stops} if record.itinerary else set()
+    present = (
+        {stop.category for stop in record.itinerary.stops}
+        if record.itinerary
+        else set()
+    )
     found = [category for category in forbidden if category in present]
-    return Score("forbidden_categories", not found, f"found: {found}" if found else "none")
+    return Score(
+        "forbidden_categories", not found, f"found: {found}" if found else "none"
+    )
 
 
 def max_total_cost(record: RunRecord, limit: float) -> Score:
@@ -122,13 +137,15 @@ def itinerary_is_feasible(record: RunRecord, _expected: bool) -> Score:
         if stop.end_time <= stop.start_time:
             problems.append(f"{stop.name}: ends before it starts")
 
-    for earlier, later in zip(stops, stops[1:], strict=False):
+    for earlier, later in pairwise(stops):
         if later.start_time < earlier.end_time:
             problems.append(f"{earlier.name} overlaps {later.name}")
         elif later.start_time - earlier.end_time > timedelta(hours=3):
             problems.append(f"{earlier.name} → {later.name}: gap over 3 hours")
 
-    return Score("itinerary_is_feasible", not problems, "; ".join(problems) or "feasible")
+    return Score(
+        "itinerary_is_feasible", not problems, "; ".join(problems) or "feasible"
+    )
 
 
 def no_hallucinated_stops(record: RunRecord, _expected: bool) -> Score:
@@ -143,7 +160,9 @@ def no_hallucinated_stops(record: RunRecord, _expected: bool) -> Score:
     return Score(
         "no_hallucinated_stops",
         not unsourced,
-        f"unsourced stops: {unsourced}" if unsourced else "all stops sourced from tools",
+        f"unsourced stops: {unsourced}"
+        if unsourced
+        else "all stops sourced from tools",
     )
 
 
@@ -157,7 +176,9 @@ def cheaper_than_previous(record: RunRecord, _expected: bool) -> Score:
 
 def shorter_walk_than_previous(record: RunRecord, _expected: bool) -> Score:
     if record.itinerary is None or record.previous is None:
-        return Score("shorter_walk_than_previous", False, "missing itinerary for comparison")
+        return Score(
+            "shorter_walk_than_previous", False, "missing itinerary for comparison"
+        )
 
     now = record.itinerary.estimated_walk_distance_km
     before = record.previous.estimated_walk_distance_km
@@ -197,7 +218,9 @@ def save_succeeds(record: RunRecord, _expected: bool) -> Score:
 def authorization_respected(record: RunRecord, _expected: bool) -> Score:
     """The run must never claim success on a denied action."""
     if record.save_error_code == "permission_denied" and record.save_succeeded:
-        return Score("authorization_respected", False, "denied action reported as succeeded")
+        return Score(
+            "authorization_respected", False, "denied action reported as succeeded"
+        )
     return Score("authorization_respected", True, "consistent")
 
 

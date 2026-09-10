@@ -16,15 +16,21 @@ import pytest_asyncio
 
 os.environ.setdefault("APP_ENV", "local")
 
-from app.auth.permissions import Principal, permissions_for_role  # noqa: E402
-from app.models import Base  # noqa: E402
-from app.persistence.postgres import SessionFactory, _engine, dispose_engine  # noqa: E402
+from app.auth.permissions import Principal, permissions_for_role
+from app.models import Base
+from app.persistence.postgres import (
+    SessionFactory,
+    _engine,
+    dispose_engine,
+)
 
 ORG_A = "org_integration_a"
 ORG_B = "org_integration_b"
 
 
-def principal(role: str = "member", organization_id: str = ORG_A, user_id: str = "user_a") -> Principal:
+def principal(
+    role: str = "member", organization_id: str = ORG_A, user_id: str = "user_a"
+) -> Principal:
     return Principal(
         user_id=user_id,
         organization_id=organization_id,
@@ -42,9 +48,8 @@ async def _schema() -> AsyncIterator[None]:
 
     yield
 
-    from sqlalchemy import delete
-
     from app.models import AgentRun, Plan
+    from sqlalchemy import delete
 
     async with SessionFactory() as session:
         for model in (Plan, AgentRun):

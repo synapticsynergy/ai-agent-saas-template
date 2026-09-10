@@ -18,11 +18,12 @@ from app.persistence import s3
 def _bucket() -> None:
     """Create the bucket if the LocalStack init script has not."""
     from app.config import settings
+    from botocore.exceptions import ClientError
 
     client = s3.get_client()
     try:
         client.head_bucket(Bucket=settings.s3_bucket)
-    except Exception:
+    except ClientError:
         client.create_bucket(
             Bucket=settings.s3_bucket,
             CreateBucketConfiguration={"LocationConstraint": settings.aws_region},

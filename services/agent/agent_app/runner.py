@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from ag_ui.core import BaseEvent, RunAgentInput
+from ag_ui.core import BaseEvent, RunAgentInput, TextInputContent
 from saas_contracts.plan import Itinerary
 from saas_contracts.streaming import ProgressStage
 
@@ -458,7 +458,12 @@ def latest_user_message(payload: RunAgentInput) -> str:
             if isinstance(content, str):
                 return content
             if isinstance(content, list):
+                # Multimodal content: only the text parts contribute here. The
+                # planner works from words; images and audio are ignored rather
+                # than stringified into nonsense.
                 return " ".join(
-                    part.text for part in content if getattr(part, "text", None)
+                    part.text
+                    for part in content
+                    if isinstance(part, TextInputContent) and part.text
                 ).strip()
     return ""

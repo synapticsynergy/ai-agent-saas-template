@@ -23,9 +23,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from saas_contracts.tools import Event, Place, PlaceDetails, Route, RouteLeg
-
 from saas_contracts.geo import haversine_km, travel_minutes
+from saas_contracts.tools import Event, Place, PlaceDetails, Route, RouteLeg
 
 _FIXTURE_PATH = Path(__file__).parent / "data.json"
 

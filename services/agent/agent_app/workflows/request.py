@@ -13,6 +13,8 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 from saas_contracts.plan import StopCategory
 
+DEFAULT_CATEGORIES: list[StopCategory] = ["dinner", "music", "drinks"]
+
 
 class PlanningRequest(BaseModel):
     """Structured constraints for one planning run."""
@@ -22,7 +24,7 @@ class PlanningRequest(BaseModel):
     start_time: datetime
 
     categories: list[StopCategory] = Field(
-        default_factory=lambda: ["dinner", "music", "drinks"],
+        default_factory=lambda: DEFAULT_CATEGORIES.copy(),
         max_length=6,
         description="Stop types to include, in visit order.",
     )

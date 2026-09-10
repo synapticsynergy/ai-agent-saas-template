@@ -152,7 +152,7 @@ def write_typescript(schema: dict[str, Any]) -> Path:
     ts_input = GENERATED / ".schema.ts-input.json"
     ts_input.write_text(json.dumps(simplify_for_typescript(schema), indent=2, sort_keys=True))
 
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [
             "pnpm",
             "--silent",
@@ -173,8 +173,7 @@ def write_typescript(schema: dict[str, Any]) -> Path:
     if result.returncode != 0:
         print(result.stderr, file=sys.stderr)
         raise SystemExit(
-            "TypeScript generation failed. Is pnpm installed? "
-            "Install it with: corepack enable pnpm"
+            "TypeScript generation failed. Is pnpm installed? Install it with: corepack enable pnpm"
         )
 
     ts_input.unlink(missing_ok=True)

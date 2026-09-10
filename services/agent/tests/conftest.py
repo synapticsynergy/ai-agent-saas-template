@@ -14,12 +14,12 @@ from datetime import UTC, datetime, timedelta
 os.environ.setdefault("APP_ENV", "local")
 os.environ.setdefault("AGENT_MODEL_PROVIDER", "scripted")
 
-import pytest  # noqa: E402
-from saas_contracts.tools import Event, Place, Route, RouteLeg  # noqa: E402
+import pytest
+from saas_contracts.tools import Event, Place, Route, RouteLeg
 
-from agent_app.workflows.geo import distance_km  # noqa: E402
-from agent_app.workflows.planner import PlannerTools  # noqa: E402
-from agent_app.workflows.request import PlanningRequest  # noqa: E402
+from agent_app.workflows.geo import distance_km
+from agent_app.workflows.planner import PlannerTools
+from agent_app.workflows.request import PlanningRequest
 
 TONIGHT = datetime(2030, 6, 1, 19, 0, tzinfo=UTC)
 LAT, LON = 45.5231, -122.6765

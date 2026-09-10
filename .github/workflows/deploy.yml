@@ -1,0 +1,112 @@
+name: Deploy
+
+# Reusable deployment pipeline. Each environment workflow calls this with its
+# own name, and inherits that GitHub Environment's secrets and protection rules.
+#
+# The order matters: infrastructure, then migrations, then the services that
+# depend on both. The agent goes last because it needs the API's URL.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: dev, staging or prod
+        required: true
+        type: string
+      run_smoke:
+        description: Run the smoke suite after deploying
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  NODE_VERSION: "22"
+  TERRAFORM_VERSION: "1.14.5"
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    env:
+      ENV: ${{ inputs.environment }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # OIDC role assumption: no static AWS credentials are stored anywhere.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # ---------------------------------------------------------------------
+      - name: Terraform init
+        working-directory: infra/terraform/envs/${{ inputs.environment }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+
+      - name: Terraform plan
+        working-directory: infra/terraform/envs/${{ inputs.environment }}
+        run: terraform plan -input=false -out=tfplan
+        env:
+          TF_VAR_workos_client_id: ${{ secrets.WORKOS_CLIENT_ID }}
+          TF_VAR_cors_origins: ${{ vars.CORS_ORIGINS }}
+
+      # The plan is reviewable in the job log before the protected environment
+      # gate releases the apply.
+      - name: Terraform apply
+        working-directory: infra/terraform/envs/${{ inputs.environment }}
+        run: terraform apply -input=false tfplan
+
+      # ---------------------------------------------------------------------
+      # Migrations run before the new application image, so the schema is always
+      # ahead of the code that reads it (expand/contract — see docs/DEPLOYMENT.md).
+      - name: Deploy the API
+        run: ./scripts/deploy/api.sh "${{ inputs.environment }}"
+
+      - name: Deploy the MCP server
+        run: ./scripts/deploy/mcp.sh "${{ inputs.environment }}"
+
+      - name: Deploy the agent
+        run: ./scripts/deploy/agent.sh "${{ inputs.environment }}"
+        env:
+          AGENTCORE_DEPLOY: "1"
+
+      - name: Deploy the web application
+        run: ./scripts/deploy/web.sh "${{ inputs.environment }}"
+        env:
+          WEB_DEPLOY_COMMAND: ${{ vars.WEB_DEPLOY_COMMAND }}
+
+      # ---------------------------------------------------------------------
+      - name: Smoke test
+        if: inputs.run_smoke
+        run: ./scripts/smoke.sh "${{ inputs.environment }}"
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ vars.APP_URL }}

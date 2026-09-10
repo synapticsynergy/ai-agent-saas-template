@@ -7,15 +7,13 @@ request path, the same database, no port juggling in CI.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import AsyncIterator
 
 import pytest
 from app.auth.dependencies import get_principal
 from app.auth.permissions import Principal
 from app.main import app
-from httpx import ASGITransport, AsyncClient
-
 from conftest import ORG_B, principal
+from httpx import ASGITransport, AsyncClient
 
 START = datetime(2030, 6, 1, 19, 0, tzinfo=UTC)
 
@@ -102,14 +100,20 @@ class TestPlansOverHttp:
         async with client_as(intruder) as client:
             assert (await client.get(f"/plans/{plan_id}")).status_code == 404
 
-    async def test_a_forged_organization_id_in_the_body_is_ignored(self, client_as) -> None:
+    async def test_a_forged_organization_id_in_the_body_is_ignored(
+        self, client_as
+    ) -> None:
         """The model may propose a tenant; the API takes it from the token."""
         who = principal("member", user_id="http_forger")
 
         async with client_as(who) as client:
             response = await client.post(
                 "/plans",
-                json={**PLAN_BODY, "organization_id": "org_attacker", "created_by_user_id": "root"},
+                json={
+                    **PLAN_BODY,
+                    "organization_id": "org_attacker",
+                    "created_by_user_id": "root",
+                },
             )
 
         body = response.json()

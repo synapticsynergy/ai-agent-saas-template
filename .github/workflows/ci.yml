@@ -1,0 +1,299 @@
+name: CI
+
+# Runs on every pull request and on pushes to the long-lived branches.
+# The gates match docs/TESTING.md: fast checks on every PR, the expensive
+# suites before a release candidate is promoted.
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+permissions:
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------------
+  python:
+    name: Python (lint, types, unit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --project packages/contracts
+          uv sync --project services/api
+          uv sync --project services/mcp
+          uv sync --project services/agent
+
+      - name: Format check
+        run: |
+          uv run --project services/api ruff format --check services/api packages/contracts
+          uv run --project services/mcp ruff format --check services/mcp
+          uv run --project services/agent ruff format --check services/agent evals tests
+
+      - name: Lint
+        run: |
+          uv run --project services/api ruff check services/api packages/contracts
+          uv run --project services/mcp ruff check services/mcp
+          uv run --project services/agent ruff check services/agent evals tests
+
+      - name: Type check
+        run: |
+          uv run --project services/api mypy services/api/app
+          uv run --project services/mcp mypy services/mcp
+          uv run --project services/agent mypy services/agent
+
+      - name: Unit, service and tool-contract tests
+        run: |
+          uv run --project packages/contracts pytest packages/contracts/tests -q
+          uv run --project services/api pytest services/api/tests -q
+          uv run --project services/mcp pytest services/mcp/tests -q
+          uv run --project services/agent pytest services/agent/tests -q
+
+  # -------------------------------------------------------------------------
+  web:
+    name: Web (lint, types, unit, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web typecheck
+      - run: pnpm --filter e2e typecheck
+      - run: pnpm --filter web test
+
+      - name: Build
+        run: pnpm --filter web build
+        env:
+          APP_ENV: local
+          AUTH_DEV_FIXTURE: "1"
+
+  # -------------------------------------------------------------------------
+  contracts:
+    name: Contracts are in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --project packages/contracts
+
+      - name: Regenerate
+        run: uv run --project packages/contracts python packages/contracts/generate.py
+
+      - name: Fail if the generated output changed
+        run: |
+          if ! git diff --exit-code -- packages/contracts/generated; then
+            echo "::error::Generated contracts are stale. Run 'make contracts' and commit the result."
+            exit 1
+          fi
+
+  # -------------------------------------------------------------------------
+  terraform:
+    name: Terraform (fmt, validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.5"
+
+      - run: terraform fmt -check -recursive infra/terraform
+
+      - name: Validate every environment
+        run: |
+          for env in local dev staging prod; do
+            echo "==> $env"
+            terraform -chdir=infra/terraform/envs/$env init -backend=false -input=false
+            terraform -chdir=infra/terraform/envs/$env validate
+          done
+
+  # -------------------------------------------------------------------------
+  integration:
+    name: Integration (Postgres + LocalStack + MCP)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      localstack:
+        image: localstack/localstack:4
+        env:
+          SERVICES: s3,dynamodb
+        ports: ["4566:4566"]
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      APP_ENV: local
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
+      DATABASE_SYNC_URL: postgresql+psycopg://postgres:postgres@localhost:5432/app
+      AWS_REGION: us-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localhost:4566
+      S3_BUCKET: ai-agent-saas-ci
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - run: |
+          uv sync --project services/api
+          uv sync --project services/mcp
+
+      - name: Apply migrations
+        run: uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+        working-directory: services/api
+
+      - name: Integration tests
+        run: uv run --project services/api pytest tests/integration -q
+
+  # -------------------------------------------------------------------------
+  # Agent evaluations gate promotion, not every pull request: a prompt, model
+  # or tool change can regress behaviour without breaking a single unit test.
+  evals:
+    name: Agent evaluations
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.base_ref == 'staging' || github.base_ref == 'main'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - run: uv sync --project services/agent
+
+      - name: Run the evaluation suite
+        run: uv run --project services/agent python -m evals.run --threshold 1.0 --json eval-results.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: eval-results.json
+
+  # -------------------------------------------------------------------------
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.base_ref == 'staging' || github.base_ref == 'main'
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      APP_ENV: local
+      AUTH_DEV_FIXTURE: "1"
+      AUTH_DEV_FIXTURE_TOKEN: local-dev-fixture-token
+      AUTH_DEV_FIXTURE_ROLE: member
+      AGENT_MODEL_PROVIDER: scripted
+      COPILOTKIT_TELEMETRY_DISABLED: "true"
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
+      DATABASE_SYNC_URL: postgresql+psycopg://postgres:postgres@localhost:5432/app
+      API_BASE_URL: http://localhost:8000
+      AGENT_BASE_URL: http://localhost:8080
+      MCP_SERVER_URL: http://localhost:8090/mcp
+      PLACES_PROVIDER: fixture
+      EVENTS_PROVIDER: fixture
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: |
+          uv sync --project services/api
+          uv sync --project services/mcp
+          uv sync --project services/agent
+          pnpm install --frozen-lockfile
+
+      - name: Prepare the database
+        run: |
+          uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+          uv run --project services/api python -m app.seed
+        working-directory: services/api
+
+      - name: Start the services
+        run: |
+          uv run --project services/api uvicorn app.main:app --port 8000 --app-dir services/api &
+          (cd services/mcp && uv run python server.py &)
+          (cd services/agent && uv run uvicorn agent:app --port 8080 &)
+          pnpm --filter web build
+          pnpm --filter web start &
+          npx --yes wait-on http://localhost:8000/health http://localhost:8080/ping http://localhost:3000 --timeout 120000
+
+      - run: pnpm --filter e2e exec playwright install --with-deps chromium
+
+      - name: Playwright
+        run: pnpm --filter e2e exec playwright test --project=chromium
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report/
+          retention-days: 7

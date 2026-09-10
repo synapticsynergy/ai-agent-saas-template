@@ -44,7 +44,9 @@ def payload(title: str = "Integration evening", key: str | None = None) -> PlanC
 
 
 class TestPersistence:
-    async def test_a_plan_round_trips(self, session: AsyncSession, member: Principal) -> None:
+    async def test_a_plan_round_trips(
+        self, session: AsyncSession, member: Principal
+    ) -> None:
         created = await plan_service.create_plan(session, member, payload())
         await session.commit()
 
@@ -66,9 +68,8 @@ class TestPersistence:
     async def test_deleting_a_plan_cascades_to_its_stops(
         self, session: AsyncSession, member: Principal
     ) -> None:
-        from sqlalchemy import func, select
-
         from app.models import PlanStop
+        from sqlalchemy import func, select
 
         created = await plan_service.create_plan(session, member, payload())
         await session.commit()
@@ -117,7 +118,9 @@ class TestTenantIsolation:
         self, session: AsyncSession, member: Principal, other_org: Principal
     ) -> None:
         mine = await plan_service.create_plan(session, member, payload(key="shared"))
-        theirs = await plan_service.create_plan(session, other_org, payload(key="shared"))
+        theirs = await plan_service.create_plan(
+            session, other_org, payload(key="shared")
+        )
         await session.commit()
 
         assert mine.id != theirs.id

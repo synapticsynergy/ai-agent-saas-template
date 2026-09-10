@@ -20,13 +20,13 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from ag_ui.core import EventType
-from saas_contracts.plan import Itinerary
-
 from agent_app.runner import RunContext, run
 from agent_app.tools.mcp_client import ToolCallError
+from saas_contracts.plan import Itinerary
+
 from evals.evaluators import CaseResult, RunRecord, evaluate
 
 DATASET = Path(__file__).parent / "dataset.json"
@@ -57,7 +57,7 @@ class EvalMcpClient:
         self.calls: list[str] = []
         self.save_error_code: str | None = None
 
-    async def __aenter__(self) -> EvalMcpClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *_: object) -> None:
@@ -106,7 +106,9 @@ class EvalMcpClient:
             mode=kwargs.get("mode", "walk"),
         )
 
-    async def save_plan(self, itinerary: dict[str, Any], idempotency_key: str | None) -> Any:
+    async def save_plan(
+        self, itinerary: dict[str, Any], idempotency_key: str | None
+    ) -> Any:
         """Apply the same permission rule the application API applies."""
         self.calls.append("save_plan")
 
@@ -127,7 +129,9 @@ class EvalMcpClient:
         }
 
 
-async def run_case(case: dict[str, Any], cases_by_id: dict[str, dict[str, Any]]) -> RunRecord:
+async def run_case(
+    case: dict[str, Any], cases_by_id: dict[str, dict[str, Any]]
+) -> RunRecord:
     import agent_app.runner as runner_module
 
     role = case.get("principal_role", "member")
@@ -159,7 +163,13 @@ async def run_case(case: dict[str, Any], cases_by_id: dict[str, dict[str, Any]])
             context.approved = True
 
         async for event in run(case["input"], context):
-            events.append(str(event.type.value if isinstance(event.type, EventType) else event.type))
+            events.append(
+                str(
+                    event.type.value
+                    if isinstance(event.type, EventType)
+                    else event.type
+                )
+            )
 
         latency_ms = int((time.monotonic() - started) * 1000)
 
@@ -232,8 +242,17 @@ def main() -> None:
     if args.case:
         dataset = {
             **dataset,
-            "cases": [c for c in dataset["cases"] if c["id"] == args.case or c["id"] in
-                      {c2.get("follow_up_to") for c2 in dataset["cases"] if c2["id"] == args.case}],
+            "cases": [
+                c
+                for c in dataset["cases"]
+                if c["id"] == args.case
+                or c["id"]
+                in {
+                    c2.get("follow_up_to")
+                    for c2 in dataset["cases"]
+                    if c2["id"] == args.case
+                }
+            ],
         }
         if not dataset["cases"]:
             raise SystemExit(f"No such case: {args.case}")

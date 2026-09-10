@@ -49,8 +49,15 @@ def mcp_url() -> Iterator[str]:
     # Launched through uv in the MCP server's own project: it is a separate
     # deployable with its own dependency set (the Strands SDK pins mcp<2.2
     # while this server needs mcp>=2.2), so it cannot share this interpreter.
-    process = subprocess.Popen(  # noqa: S603
-        ["uv", "run", "--project", str(REPO_ROOT / "services" / "mcp"), "python", "server.py"],
+    process = subprocess.Popen(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(REPO_ROOT / "services" / "mcp"),
+            "python",
+            "server.py",
+        ],
         cwd=REPO_ROOT / "services" / "mcp",
         env=env,
         stdout=subprocess.PIPE,
@@ -135,9 +142,9 @@ class McpClient:
         return _message(self._post("resources/list", {}).text)["result"]["resources"]
 
     def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        result = _message(self._post("tools/call", {"name": name, "arguments": arguments}).text)[
-            "result"
-        ]
+        result = _message(
+            self._post("tools/call", {"name": name, "arguments": arguments}).text
+        )["result"]
         structured = result.get("structuredContent") or {}
         if set(structured) == {"result"} and isinstance(structured["result"], dict):
             return structured["result"]

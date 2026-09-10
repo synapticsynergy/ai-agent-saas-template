@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from mcp_server.config import settings
-from mcp_server.providers.base import EventsProvider, PlacesProvider, RouteProvider
 from saas_contracts.fixtures import (
     FixtureEventsProvider,
     FixturePlacesProvider,
     FixtureRouteProvider,
 )
+
+from mcp_server.config import settings
+from mcp_server.providers.base import EventsProvider, PlacesProvider, RouteProvider
 
 
 @lru_cache
