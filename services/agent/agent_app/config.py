@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ModelProvider = Literal["bedrock", "scripted"]
+ModelProvider = Literal["anthropic", "bedrock", "scripted"]
 
 
 class Settings(BaseSettings):
@@ -29,15 +29,30 @@ class Settings(BaseSettings):
     mcp_server_url: str = "http://localhost:8090/mcp"
     agentcore_gateway_url: str = ""
 
+    # Claude API, called directly. An empty key is not an error: the Anthropic
+    # SDK also resolves ANTHROPIC_API_KEY from the process environment,
+    # ANTHROPIC_AUTH_TOKEN, and `ant auth login` profiles.
+    anthropic_api_key: str = ""
+    anthropic_model_id: str = "claude-opus-5"
+    # Generous on purpose: current models think before answering and those
+    # tokens count against this cap. Only tokens actually generated are billed.
+    anthropic_max_tokens: int = 16000
+
     bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     bedrock_region: str = "us-west-2"
     bedrock_max_tokens: int = 4096
-    bedrock_temperature: float = 0.3
+    # Unset by default. Claude Opus 5 and Sonnet 5 reject sampling parameters
+    # with a 400, which the interpreter would swallow as a fallback to rules —
+    # so a default here would quietly switch the model off.
+    bedrock_temperature: float | None = None
 
-    # "bedrock" runs the real model. "scripted" skips model inference entirely
-    # and uses rule-based request parsing, so the reference app, the E2E suite
-    # and the deterministic eval layer run without AWS credentials.
-    # It is refused outside APP_ENV=local for the same reason AUTH_DEV_FIXTURE is.
+    # Which model interprets requests and writes replies:
+    #   anthropic — Claude API directly
+    #   bedrock   — Claude on Amazon Bedrock
+    #   scripted  — no model call; rule-based parsing and composed replies, so
+    #               the reference app, E2E suite and deterministic evals run
+    #               without credentials. Refused outside APP_ENV=local, for the
+    #               same reason AUTH_DEV_FIXTURE is.
     agent_model_provider: ModelProvider = "bedrock"
 
     agent_timeout_seconds: float = 120.0

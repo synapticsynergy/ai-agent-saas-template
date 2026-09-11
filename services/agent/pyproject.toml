@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Strands agent for Bedrock AgentCore Runtime"
 requires-python = ">=3.12"
 dependencies = [
-    "strands-agents>=1.55,<2.0",
+    "strands-agents[anthropic]>=1.55,<2.0",
     "bedrock-agentcore>=1.22,<2.0",
     "ag-ui-protocol>=0.1.22,<1.0",
     "fastapi>=0.141,<1.0",

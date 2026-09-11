@@ -234,13 +234,13 @@ class TestInterpreterSelection:
 
     async def test_a_model_failure_degrades_to_rules(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A Bedrock outage must cost understanding, not availability."""
-        from agent_app.interpreter import BedrockInterpreter
+        from agent_app.interpreter import ModelInterpreter
 
         class ExplodingAgent:
             async def structured_output_async(self, *_: object, **__: object) -> None:
                 raise RuntimeError("bedrock unavailable")
 
-        interpreter = BedrockInterpreter()
+        interpreter = ModelInterpreter()
         monkeypatch.setattr(interpreter, "_build", lambda: ExplodingAgent())
 
         result = await interpreter.interpret(
@@ -251,7 +251,7 @@ class TestInterpreterSelection:
 
     async def test_the_model_cannot_move_the_user(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Location and clock come from the server, whatever the model returns."""
-        from agent_app.interpreter import BedrockInterpreter
+        from agent_app.interpreter import ModelInterpreter
         from agent_app.workflows.request import PlanningRequest
 
         class WanderingAgent:
@@ -263,7 +263,7 @@ class TestInterpreterSelection:
                     categories=["dinner"],
                 )
 
-        interpreter = BedrockInterpreter()
+        interpreter = ModelInterpreter()
         monkeypatch.setattr(interpreter, "_build", lambda: WanderingAgent())
 
         result = await interpreter.interpret(
@@ -303,7 +303,7 @@ class TestNarration:
     async def test_the_model_writes_the_reply_when_bedrock_is_selected(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from agent_app.interpreter import BedrockInterpreter
+        from agent_app.interpreter import ModelInterpreter
 
         class StreamingAgent:
             async def stream_async(self, prompt: str):  # type: ignore[no-untyped-def]
@@ -312,7 +312,7 @@ class TestNarration:
                     yield {"data": delta}
 
         narrator = StreamingAgent()
-        interpreter = BedrockInterpreter()
+        interpreter = ModelInterpreter()
         monkeypatch.setattr(interpreter, "_build_narrator", lambda: narrator)
 
         itinerary = await build_itinerary(
@@ -335,14 +335,14 @@ class TestNarration:
     async def test_a_narration_failure_falls_back_to_composed_text(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from agent_app.interpreter import BedrockInterpreter
+        from agent_app.interpreter import ModelInterpreter
 
         class ExplodingAgent:
             async def stream_async(self, _prompt: str):  # type: ignore[no-untyped-def]
                 raise RuntimeError("bedrock unavailable")
                 yield  # pragma: no cover - unreachable, marks this a generator
 
-        interpreter = BedrockInterpreter()
+        interpreter = ModelInterpreter()
         monkeypatch.setattr(interpreter, "_build_narrator", lambda: ExplodingAgent())
 
         itinerary = await build_itinerary(
@@ -358,14 +358,14 @@ class TestNarration:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A silent model is as useless as a broken one."""
-        from agent_app.interpreter import BedrockInterpreter
+        from agent_app.interpreter import ModelInterpreter
 
         class SilentAgent:
             async def stream_async(self, _prompt: str):  # type: ignore[no-untyped-def]
                 return
                 yield  # pragma: no cover - unreachable, marks this a generator
 
-        interpreter = BedrockInterpreter()
+        interpreter = ModelInterpreter()
         monkeypatch.setattr(interpreter, "_build_narrator", lambda: SilentAgent())
 
         itinerary = await build_itinerary(
@@ -376,3 +376,47 @@ class TestNarration:
 
         text = "".join([chunk async for chunk in interpreter.narrate(itinerary, request, "")])
         assert text
+
+
+class TestModelProviders:
+    """Each provider builds the model it names, with parameters it accepts."""
+
+    def test_anthropic_selects_the_model_interpreter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_app import interpreter as module
+        from agent_app.config import settings
+
+        monkeypatch.setattr(settings, "agent_model_provider", "anthropic")
+        assert module.get_interpreter().name == "anthropic"
+
+    def test_the_anthropic_model_is_built_from_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from strands.models.anthropic import AnthropicModel
+
+        from agent_app.config import settings
+        from agent_app.interpreter import ModelInterpreter
+
+        monkeypatch.setattr(settings, "agent_model_provider", "anthropic")
+        monkeypatch.setattr(settings, "anthropic_api_key", "sk-ant-test")
+        monkeypatch.setattr(settings, "anthropic_model_id", "claude-sonnet-5")
+
+        model = ModelInterpreter()._model()
+
+        assert isinstance(model, AnthropicModel)
+        config = model.get_config()
+        assert config["model_id"] == "claude-sonnet-5"
+        # Claude Opus 5 and Sonnet 5 return a 400 for sampling parameters.
+        assert "temperature" not in (config.get("params") or {})
+
+    def test_bedrock_sends_no_temperature_unless_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A default temperature would 400 on newer models and silently fall back."""
+        from agent_app.config import settings
+        from agent_app.interpreter import ModelInterpreter
+
+        monkeypatch.setattr(settings, "agent_model_provider", "bedrock")
+        monkeypatch.setattr(settings, "bedrock_temperature", None)
+
+        config = ModelInterpreter()._model().get_config()
+        assert "temperature" not in config

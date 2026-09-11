@@ -6,8 +6,9 @@ code (see docs/adr/ADR-007-deterministic-planner.md).
 
 Two implementations behind one interface:
 
-* :class:`BedrockInterpreter` — a Strands agent on Amazon Bedrock. Interprets
-  via structured output, narrates via a streamed completion.
+* :class:`ModelInterpreter` — a Strands agent on Claude, via the Claude API or
+  Amazon Bedrock. Interprets via structured output, narrates via a streamed
+  completion.
 * :class:`RuleInterpreter` — deterministic keyword extraction and composed
   prose. Used when ``AGENT_MODEL_PROVIDER=scripted``, and as the fallback
   whenever a model call fails, so a Bedrock outage degrades how the agent reads
@@ -100,25 +101,28 @@ class RuleInterpreter:
             yield chunk
 
 
-class BedrockInterpreter:
-    """A Strands agent on Bedrock, asked for a PlanningRequest directly.
+class ModelInterpreter:
+    """A Strands agent on Claude — the Claude API directly, or Amazon Bedrock.
 
     Structured output rather than free text plus parsing: the model fills a
     schema the rest of the system already validates, so a malformed answer fails
     at the boundary instead of becoming a strange itinerary.
+
+    The provider is chosen by ``AGENT_MODEL_PROVIDER``. Everything above the
+    model — prompts, fallbacks, re-pinning — is identical for both, so switching
+    providers changes cost and setup, not behaviour.
     """
 
-    name = "bedrock"
-
     def __init__(self) -> None:
+        self.name: str = settings.agent_model_provider
         # Strands' Agent is untyped at this boundary, so these are Any rather
         # than pretending to a precision the SDK does not provide.
         self._agent: Any = None
         self._narrator: Any = None
 
     def _build(self) -> Any:
-        # Imported lazily so `AGENT_MODEL_PROVIDER=scripted` never needs boto3
-        # credentials or a Bedrock-capable environment.
+        # Imported lazily so `AGENT_MODEL_PROVIDER=scripted` needs neither a
+        # provider SDK nor credentials.
         from strands import Agent
 
         return Agent(model=self._model(), system_prompt=SYSTEM_PROMPT)
@@ -129,14 +133,36 @@ class BedrockInterpreter:
         return Agent(model=self._model(), system_prompt=NARRATION_PROMPT)
 
     def _model(self) -> Any:
+        if self.name == "anthropic":
+            from strands.models.anthropic import AnthropicModel
+
+            # Pass the key only when configured. The repository .env is read
+            # into settings, not into the process environment, so the SDK would
+            # not otherwise see it; when it is empty the SDK resolves
+            # credentials itself.
+            client_args = (
+                {"api_key": settings.anthropic_api_key} if settings.anthropic_api_key else None
+            )
+            # No sampling parameters: Claude Opus 5 and Sonnet 5 reject them.
+            return AnthropicModel(
+                client_args=client_args,
+                model_id=settings.anthropic_model_id,
+                max_tokens=settings.anthropic_max_tokens,
+            )
+
         from strands.models import BedrockModel
 
-        return BedrockModel(
-            model_id=settings.bedrock_model_id,
-            region_name=settings.bedrock_region,
-            max_tokens=settings.bedrock_max_tokens,
-            temperature=settings.bedrock_temperature,
-        )
+        # Note for newer models on Bedrock: structured output forces tool use,
+        # and Bedrock requires thinking to be disabled alongside a forced
+        # tool_choice. The Claude API does not.
+        options: dict[str, Any] = {
+            "model_id": settings.bedrock_model_id,
+            "region_name": settings.bedrock_region,
+            "max_tokens": settings.bedrock_max_tokens,
+        }
+        if settings.bedrock_temperature is not None:
+            options["temperature"] = settings.bedrock_temperature
+        return BedrockModel(**options)
 
     async def interpret(
         self, text: str, *, latitude: float, longitude: float, start_time: datetime | None
@@ -159,7 +185,7 @@ class BedrockInterpreter:
                 f"start_time {defaults.start_time.isoformat()}.",
             )
         except Exception as exc:
-            log.warning("interpreter.bedrock_failed", error=str(exc))
+            log.warning("interpreter.model_failed", provider=self.name, error=str(exc))
             return defaults
 
         # Re-pin the fields the model must not decide, whatever it returned.
@@ -242,6 +268,6 @@ def _narration_prompt(itinerary: Itinerary, request: PlanningRequest, note: str)
 
 
 def get_interpreter() -> Interpreter:
-    if settings.agent_model_provider == "bedrock":
-        return BedrockInterpreter()
+    if settings.agent_model_provider in ("anthropic", "bedrock"):
+        return ModelInterpreter()
     return RuleInterpreter()

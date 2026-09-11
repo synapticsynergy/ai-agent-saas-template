@@ -47,6 +47,21 @@ then uses rule-based extraction; everything else — the planner, the tools, the
 streaming and the whole authorization path — is unchanged. Refused outside
 `APP_ENV=local`.
 
+## Choosing a model
+
+`AGENT_MODEL_PROVIDER` picks what interprets requests and writes replies:
+
+| Provider | Needs | Notes |
+|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` (or `ant auth login`) | Least setup. Default model `claude-opus-5`; set `ANTHROPIC_MODEL_ID` to `claude-sonnet-5` or `claude-haiku-4-5` to spend less. |
+| `bedrock` | AWS credentials, plus model access granted in the Bedrock console | Keeps inference inside your AWS account. Pricing is set by AWS. |
+| `scripted` | nothing | No model call. Local and test only. |
+
+The model does two short jobs per run — turning a sentence into constraints,
+and a two- or three-sentence reply — so cost is dominated by which model you
+choose rather than which platform serves it. Everything else (planner, tools,
+streaming, authorization) is identical across providers.
+
 ## HTTP contract
 
 | Route | Purpose |
