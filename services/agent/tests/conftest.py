@@ -12,8 +12,12 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-os.environ.setdefault("APP_ENV", "local")
-os.environ.setdefault("AGENT_MODEL_PROVIDER", "scripted")
+# Pin the world these tests run in. `setdefault` is wrong here: the Makefile
+# exports the developer's .env, so a real provider or credential would leak
+# into the suite — which made these tests call a real API and pass only
+# because failures fall back silently.
+os.environ["APP_ENV"] = "local"
+os.environ["AGENT_MODEL_PROVIDER"] = "scripted"
 
 import pytest
 from saas_contracts.tools import Event, Place, Route, RouteLeg

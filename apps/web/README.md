@@ -37,14 +37,24 @@ environment variables, so switching providers is configuration.
 > forbids production traffic; point `NEXT_PUBLIC_MAP_TILE_URL` at your own
 > provider before deploying.
 
+## Route groups
+
+Parenthesised folders are Next.js *route groups*: they organise files without
+adding a URL segment, so `(map)/planner/` serves `/planner`.
+
+There are two, and the only thing separating them is the shell: the planner
+needs the whole viewport for its map, Plans wants a normal padded page, and a
+layout cannot vary a prop per child route. Each group's layout is also the
+authentication boundary for the pages beneath it — `requireSession()` runs
+before any of them render.
+
 ## Structure
 
 ```text
 src/
 ├── app/
-│   ├── (app)/                protected area; the layout enforces the session
-│   │   ├── (map)/planner/    full-bleed: the map owns the viewport
-│   │   └── (standard)/plans/ normal padded page
+│   ├── (map)/planner/        full-bleed: the map owns the viewport
+│   ├── (standard)/plans/     normal padded page
 │   ├── api/copilotkit/       the agent runtime endpoint and identity boundary
 │   ├── auth/callback/        WorkOS AuthKit redirect URI
 │   └── page.tsx

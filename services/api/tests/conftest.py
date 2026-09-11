@@ -11,8 +11,12 @@ import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
-os.environ.setdefault("APP_ENV", "local")
-os.environ.setdefault("AUTH_DEV_FIXTURE", "0")
+# Pin the world these tests run in. `setdefault` is wrong here: the Makefile
+# exports the developer's .env, so a real provider or credential would leak
+# into the suite — which made these tests call a real API and pass only
+# because failures fall back silently.
+os.environ["APP_ENV"] = "local"
+os.environ["AUTH_DEV_FIXTURE"] = "0"
 
 import pytest
 from httpx import ASGITransport, AsyncClient

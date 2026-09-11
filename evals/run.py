@@ -4,8 +4,8 @@
     uv run --project services/agent python -m evals.run --threshold 0.9 --json results.json
 
 Runs every scenario in ``dataset.json`` against the agent and scores the
-structured outcome. Results are deterministic under the fixture providers, so
-this is safe to gate CI on.
+structured outcome. Results are deterministic — fixture providers, and no model
+call — so this is safe to gate CI on at a 100% threshold.
 
 Authorization cases run with a viewer and a member principal and assert the
 boundary held — the point being that "the agent must not be able to write as a
@@ -17,10 +17,19 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Any, Self
+
+# This harness asserts exact structured outcomes and CI gates it at 100%, so it
+# runs model-free. Pinned rather than defaulted: the Makefile exports the
+# developer's .env, and a configured provider would otherwise turn every eval
+# run into a paid, nondeterministic one. Evaluating a real model is a different
+# exercise and belongs in its own runner.
+os.environ["APP_ENV"] = "local"
+os.environ["AGENT_MODEL_PROVIDER"] = "scripted"
 
 from ag_ui.core import EventType
 from agent_app.runner import RunContext, run

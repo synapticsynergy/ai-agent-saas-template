@@ -14,7 +14,11 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 
-os.environ.setdefault("APP_ENV", "local")
+# Pin the world these tests run in. `setdefault` is wrong here: the Makefile
+# exports the developer's .env, so a real provider or credential would leak
+# into the suite — which made these tests call a real API and pass only
+# because failures fall back silently.
+os.environ["APP_ENV"] = "local"
 
 from app.auth.permissions import Principal, permissions_for_role
 from app.models import Base
