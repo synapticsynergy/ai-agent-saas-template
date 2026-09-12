@@ -35,34 +35,24 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --project packages/contracts
-          uv sync --project services/api
-          uv sync --project services/mcp
-          uv sync --project services/agent
+          uv sync --project services/backend
 
       - name: Format check
         run: |
-          uv run --project services/api ruff format --check services/api packages/contracts
-          uv run --project services/mcp ruff format --check services/mcp
-          uv run --project services/agent ruff format --check services/agent evals tests
+          uv run --project services/backend ruff format --check services/backend packages/contracts evals tests
 
       - name: Lint
         run: |
-          uv run --project services/api ruff check services/api packages/contracts
-          uv run --project services/mcp ruff check services/mcp
-          uv run --project services/agent ruff check services/agent evals tests
+          uv run --project services/backend ruff check services/backend packages/contracts evals tests
 
       - name: Type check
         run: |
-          uv run --project services/api mypy services/api/app
-          uv run --project services/mcp mypy services/mcp
-          uv run --project services/agent mypy services/agent
+          uv run --project services/backend mypy services/backend
 
       - name: Unit, service and tool-contract tests
         run: |
           uv run --project packages/contracts pytest packages/contracts/tests -q
-          uv run --project services/api pytest services/api/tests -q
-          uv run --project services/mcp pytest services/mcp/tests -q
-          uv run --project services/agent pytest services/agent/tests -q
+          uv run --project services/backend pytest services/backend/tests -q
 
   # -------------------------------------------------------------------------
   web:
@@ -186,15 +176,14 @@ jobs:
           enable-cache: true
 
       - run: |
-          uv sync --project services/api
-          uv sync --project services/mcp
+          uv sync --project services/backend
 
       - name: Apply migrations
-        run: uv run --project services/api alembic -c services/api/alembic.ini upgrade head
-        working-directory: services/api
+        run: uv run --project services/backend alembic -c services/backend/alembic.ini upgrade head
+        working-directory: services/backend
 
       - name: Integration tests
-        run: uv run --project services/api pytest tests/integration -q
+        run: uv run --project services/backend pytest tests/integration -q
 
   # -------------------------------------------------------------------------
   # Agent evaluations gate promotion, not every pull request: a prompt, model
@@ -209,10 +198,10 @@ jobs:
         with:
           enable-cache: true
 
-      - run: uv sync --project services/agent
+      - run: uv sync --project services/backend
 
       - name: Run the evaluation suite
-        run: uv run --project services/agent python -m evals.run --threshold 1.0 --json eval-results.json
+        run: uv run --project services/backend python -m evals.run --threshold 1.0 --json eval-results.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -249,8 +238,9 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
       DATABASE_SYNC_URL: postgresql+psycopg://postgres:postgres@localhost:5432/app
       API_BASE_URL: http://localhost:8000
-      AGENT_BASE_URL: http://localhost:8080
-      MCP_SERVER_URL: http://localhost:8090/mcp
+      AGENT_BASE_URL: http://localhost:8000/agent
+      MCP_SERVER_URL: http://localhost:8000/mcp
+      MCP_ALLOWED_HOSTS: localhost:8000,127.0.0.1:8000
       PLACES_PROVIDER: fixture
       EVENTS_PROVIDER: fixture
 
@@ -266,25 +256,21 @@ jobs:
           cache: pnpm
 
       - run: |
-          uv sync --project services/api
-          uv sync --project services/mcp
-          uv sync --project services/agent
+          uv sync --project services/backend
           pnpm install --frozen-lockfile
 
       - name: Prepare the database
         run: |
-          uv run --project services/api alembic -c services/api/alembic.ini upgrade head
-          uv run --project services/api python -m app.seed
-        working-directory: services/api
+          uv run --project services/backend alembic -c services/backend/alembic.ini upgrade head
+          uv run --project services/backend python -m app.seed
+        working-directory: services/backend
 
       - name: Start the services
         run: |
-          uv run --project services/api uvicorn app.main:app --port 8000 --app-dir services/api &
-          (cd services/mcp && uv run python server.py &)
-          (cd services/agent && uv run uvicorn agent:app --port 8080 &)
+          (cd services/backend && uv run uvicorn asgi:app --port 8000 &)
           pnpm --filter web build
           pnpm --filter web start &
-          npx --yes wait-on http://localhost:8000/health http://localhost:8080/ping http://localhost:3000 --timeout 120000
+          npx --yes wait-on http://localhost:8000/health http://localhost:8000/agent/ping http://localhost:3000 --timeout 120000
 
       - run: pnpm --filter e2e exec playwright install --with-deps chromium
 

@@ -10,7 +10,8 @@ SHELL := /bin/bash
 WEB      := apps/web
 BACKEND  := services/backend
 CONTRACTS := packages/contracts
-TERRAFORM_DIR := infra/terraform
+# The AWS path lives under advanced/ and is not the default (ADR-009).
+TERRAFORM_DIR := advanced/infra/terraform
 
 PNPM := pnpm
 UV   := uv
@@ -203,7 +204,10 @@ eval: ## Run the agent evaluation suite
 test: test-unit test-integration test-e2e ## Full local test suite
 
 .PHONY: check
-check: format-check lint typecheck contracts-check test-unit terraform-fmt terraform-validate ## Fast pre-push suite
+check: format-check lint typecheck contracts-check test-unit ## Fast pre-push suite
+	@echo ""
+	@echo "Terraform is not checked here — it belongs to the advanced/ AWS path."
+	@echo "Run 'make infra-check' if you are working on it."
 
 # ---------------------------------------------------------------------------
 # Terraform
@@ -263,56 +267,33 @@ infra-local-apply: ## Apply the local Terraform env against LocalStack
 build: ## Build all container images
 	docker compose build
 
-.PHONY: api-package
-api-package: ## Build the FastAPI Lambda container image
-	docker build -f $(BACKEND)/Dockerfile -t ai-agent-saas-backend:$(or $(TAG),local) .
+.PHONY: backend-image
+backend-image: ## Build the deployable backend image
+	docker build -f $(BACKEND)/Dockerfile --target runtime \
+		-t ai-agent-saas-backend:$(or $(TAG),local) .
 
 # ---------------------------------------------------------------------------
 # Deployment
 # ---------------------------------------------------------------------------
+#
+# Two deploys: the backend as a container, the web app to Vercel. Neither is
+# wrapped in a Make target that hides which account it is talking to — see
+# docs/DEPLOYMENT.md. The AWS path (Terraform, Lambda, AgentCore, four
+# environments) is preserved under advanced/.
 
-.PHONY: api-deploy
-api-deploy: ## Deploy the API: make api-deploy ENV=dev
-	$(require_env)
-	@./scripts/deploy/api.sh $(ENV)
-
-.PHONY: agent-deploy
-agent-deploy: ## Deploy the agent to AgentCore Runtime: make agent-deploy ENV=dev
-	$(require_env)
-	@./scripts/deploy/agent.sh $(ENV)
-
-.PHONY: mcp-deploy
-mcp-deploy: ## Deploy the MCP server / Gateway targets: make mcp-deploy ENV=dev
-	$(require_env)
-	@./scripts/deploy/mcp.sh $(ENV)
-
-.PHONY: web-deploy
-web-deploy: ## Deploy the web application: make web-deploy ENV=dev
-	$(require_env)
-	@./scripts/deploy/web.sh $(ENV)
-
-.PHONY: deploy
-deploy: ## Deploy every component: make deploy ENV=dev
-	$(require_env)
-	@$(MAKE) --no-print-directory terraform-plan ENV=$(ENV)
-	@$(MAKE) --no-print-directory terraform-apply ENV=$(ENV) CONFIRM=$(CONFIRM)
-	@$(MAKE) --no-print-directory api-deploy ENV=$(ENV)
-	@$(MAKE) --no-print-directory mcp-deploy ENV=$(ENV)
-	@$(MAKE) --no-print-directory agent-deploy ENV=$(ENV)
-	@$(MAKE) --no-print-directory web-deploy ENV=$(ENV)
-	@$(MAKE) --no-print-directory smoke ENV=$(ENV)
-
-.PHONY: deploy-dev
-deploy-dev: ## Deploy to the dev environment
-	@$(MAKE) --no-print-directory deploy ENV=dev
-
-.PHONY: deploy-staging
-deploy-staging: ## Deploy to the staging environment
-	@$(MAKE) --no-print-directory deploy ENV=staging
-
-.PHONY: deploy-prod
-deploy-prod: ## Deploy to production (requires CONFIRM=prod)
-	@$(MAKE) --no-print-directory deploy ENV=prod CONFIRM=$(CONFIRM)
+.PHONY: deploy-help
+deploy-help: ## Show the deploy commands
+	@echo "Backend (pick one):"
+	@echo "  fly deploy"
+	@echo "  render: New -> Blueprint, or push to the connected branch"
+	@echo ""
+	@echo "Web:"
+	@echo "  pnpm --filter web exec vercel deploy --prod"
+	@echo ""
+	@echo "Migrations run first:"
+	@echo "  cd $(BACKEND) && uv run alembic upgrade head"
+	@echo ""
+	@echo "See docs/DEPLOYMENT.md. AWS path: advanced/README.md"
 
 # ---------------------------------------------------------------------------
 # Post-deploy validation

@@ -1,384 +1,144 @@
-# Deployment and Environments
+# Deployment
 
-## Environments
+Two deploys. The web app goes to Vercel; the backend — the API, the agent and
+the MCP server, which are one ASGI application
+([ADR-009](adr/ADR-009-one-backend-deployable.md)) — goes to any host that runs
+a container.
 
-```text
-local
-dev
-staging
-prod
+```
+apps/web           → Vercel
+services/backend   → Fly.io or Render
+Postgres           → Neon (or any managed Postgres)
 ```
 
-`local` is disposable.
+The AWS path — Terraform, Lambda, AgentCore, four environments — still exists
+under [`advanced/`](../advanced/README.md), with
+[advanced/DEPLOYMENT.md](../advanced/DEPLOYMENT.md) as its guide. Start here;
+graduate when you have a reason.
 
-`dev`, `staging`, and `prod` are isolated cloud environments.
+## 1. Database
 
-Never share databases, buckets, secrets, or auth configuration across prod and non-prod.
-
----
-
-# Terraform Layout
-
-```text
-infra/terraform/
-├── modules/
-│   ├── networking/     VPC, subnets, security groups
-│   ├── database/       RDS Postgres, credentials in Secrets Manager
-│   ├── storage/        S3, optional DynamoDB
-│   ├── api/            ECR, Lambda, HTTP API Gateway, IAM
-│   ├── mcp/            ECR, Lambda, Function URL, IAM
-│   └── observability/  alarms, metric filters, dashboard
-└── envs/
-    ├── local/          LocalStack; only the services it reproduces well
-    ├── dev/
-    ├── staging/
-    └── prod/
-```
-
-Each environment composes the shared modules and supplies its own sizing.
-Production variables carry `validation` blocks that refuse a CORS wildcard,
-single-AZ, a backup window under seven days, or deletion protection turned off —
-so a dangerous configuration fails at plan time rather than in review.
-
-Example:
-
-```text
-envs/staging/main.tf
-envs/staging/variables.tf
-envs/staging/outputs.tf
-envs/staging/backend.tf
-```
-
-Prefer separate remote state per environment.
-
-Do not use the same state file for staging and production.
-
----
-
-# What Terraform Owns
-
-Terraform owns conventional AWS infrastructure:
-
-- API Gateway,
-- Lambda,
-- IAM,
-- S3,
-- DynamoDB if used,
-- database/networking resources,
-- CloudWatch alarms/log configuration,
-- DNS where appropriate,
-- environment-specific outputs.
-
-## What Terraform does not own
-
-**Application image tags.** Terraform creates the Lambda functions and ignores
-`image_uri` thereafter. `make api-deploy` builds an immutable image, pushes it
-and repoints the function. A release is therefore not an infrastructure change:
-`terraform plan` stays free of churn from ordinary deploys, and rollback is
-"point at the previous tag".
-
-**AgentCore Runtime.** Owned by the AgentCore CLI. Terraform outputs the API
-URL, MCP endpoint and bucket name; `scripts/deploy/agent.sh` reads them and
-passes them to `agentcore deploy`. See
-[ADR-006](adr/ADR-006-agentcore-owns-its-own-resources.md).
-
-**The web host.** Deliberately unchosen — Next.js deploys well to several
-places and the right answer depends on the product. `scripts/deploy/web.sh`
-fails with instructions until `WEB_DEPLOY_COMMAND` is configured, rather than
-silently doing nothing.
-
-One system owns each resource. Two systems owning one resource is not a
-theoretical concern: it surfaced immediately while building this template, as a
-"table already exists" error when the local Terraform environment and the
-Compose bootstrap both tried to create the same DynamoDB table.
-
----
-
-# AgentCore Deployment
+Create a Postgres database (Neon's free tier is enough to start) and keep two
+connection strings — the app is async, Alembic is sync:
 
 ```bash
-make agent-deploy ENV=staging
+DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DB
+DATABASE_SYNC_URL=postgresql+psycopg://USER:PASSWORD@HOST/DB
 ```
 
-`scripts/deploy/agent.sh` reads the Terraform outputs for that environment,
-exports them, and runs `agentcore configure` then `agentcore deploy --dry-run`
-then `agentcore deploy`. The handoff between the two systems is explicit and in
-version control, not a manual step somebody remembers.
-
-It requires the AgentCore CLI and fails with an install hint when it is missing:
+Apply migrations before the backend first starts:
 
 ```bash
-uv tool install bedrock-agentcore-starter-toolkit
+cd services/backend && DATABASE_SYNC_URL=... uv run alembic upgrade head
 ```
 
----
+Migrations run ahead of the code that reads the schema — expand first, contract
+later — so a deploy never leaves the running version ahead of its database.
 
-# Environment Configuration
+## 2. Backend
 
-Terraform creates the database credential itself — a generated password stored
-in Secrets Manager at `/<project>/<environment>/database-url`. It is never a
-Terraform variable, so it cannot end up in a tfvars file, a shell history or a
-CI log.
+Both hosts build `services/backend/Dockerfile` with the repository root as the
+build context, because the service depends on `packages/contracts` by path.
 
-```text
-/ai-agent-saas/dev/database-url
-/ai-agent-saas/staging/database-url
-/ai-agent-saas/prod/database-url
-```
-
-The API's Lambda role can read exactly that one secret, and nothing else.
-
-`WORKOS_CLIENT_ID` is passed as plain configuration, deliberately: it only
-identifies which JWKS to verify access tokens against. The **API key is never
-given to the API** — it verifies tokens rather than calling WorkOS, so it does
-not need one.
-
-Never reuse WorkOS production credentials locally.
-
-Recommended:
-
-```text
-WorkOS dev environment      → local/dev
-WorkOS staging environment  → staging
-WorkOS prod environment     → prod
-```
-
----
-
-# Dev Deployment
-
-Branch:
-
-```text
-dev
-```
-
-Manual fallback:
+### Fly.io
 
 ```bash
-git checkout dev
-git pull origin dev
-
-make check
-make deploy-dev
+fly launch --copy-config --no-deploy
+fly secrets set \
+  DATABASE_URL=... DATABASE_SYNC_URL=... \
+  ANTHROPIC_API_KEY=... \
+  WORKOS_API_KEY=... WORKOS_CLIENT_ID=...
+fly deploy
 ```
 
-Conceptual deploy:
+`fly.toml` sets `auto_stop_machines = false` on purpose — see the note on
+sleeping below.
 
-```text
-terraform plan/apply dev
-deploy FastAPI Lambda
-deploy AgentCore agent
-deploy MCP service/targets
-deploy web
-run smoke tests
-```
+### Render
 
----
+New → Blueprint, pointed at this repository; `render.yaml` describes the
+service. Set the secrets marked `sync: false` in the dashboard.
 
-# Staging Deployment
+### Sleeping is the thing to watch
 
-Branch:
+Free instances on both hosts sleep after inactivity and cold-start on the next
+request. That is tolerable behind a browser. It is not tolerable for the MCP
+endpoint: an MCP client such as Claude Desktop connects on its own schedule, and
+a 50-second cold start reads as a broken server rather than a slow one. If the
+MCP endpoint matters to you, pay for an always-on instance.
 
-```text
-staging
-```
+### `MCP_ALLOWED_HOSTS` is not optional
 
-Promotion:
+The MCP transport rejects any `Host` header it was not told to expect, with a
+421 — DNS-rebinding protection. Set it to the hostname clients actually use:
 
 ```bash
-git checkout staging
-git pull origin staging
-git merge origin/dev
-git push origin staging
+MCP_ALLOWED_HOSTS=your-backend.fly.dev
 ```
 
-CI:
+Configuration refuses to start outside `APP_ENV=local` without it, because the
+alternative failure mode is a server that runs happily and refuses every client.
 
-```text
-test
-eval
-Terraform plan
-Terraform apply staging
-deploy services
-smoke tests
-E2E
-```
-
-Staging is the primary release-candidate and validation environment.
-
-Keep it seeded, observable, and reliable.
-
----
-
-# Production Deployment
-
-Branch:
-
-```text
-main
-```
-
-Promotion:
+## 3. Web
 
 ```bash
-git checkout main
-git pull origin main
-git merge origin/staging
-git push origin main
+pnpm --filter web exec vercel deploy --prod
 ```
 
-Production pipeline:
+or connect the repository in Vercel's dashboard; `vercel.json` has the monorepo
+build wiring. Set these in the Vercel project:
 
-```text
-required CI
-↓
-production Terraform plan
-↓
-human approval
-↓
-database migration
-↓
-Terraform apply
-↓
-service deploys
-↓
-agent deploy
-↓
-web deploy
-↓
-smoke tests
-↓
-release tag
-```
+| Variable | Value |
+|---|---|
+| `APP_ENV` | `production` |
+| `API_BASE_URL` | `https://your-backend.fly.dev` |
+| `AGENT_BASE_URL` | `https://your-backend.fly.dev/agent` |
+| `NEXT_PUBLIC_APP_URL` | your Vercel URL |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_REDIRECT_URI`, `WORKOS_COOKIE_PASSWORD` | from the WorkOS dashboard |
 
----
+`NEXT_PUBLIC_*` variables are inlined at **build** time, so changing one
+requires a redeploy, not just a restart.
 
-# Rollback Strategy
+`WORKOS_REDIRECT_URI` must exactly match the redirect configured in WorkOS —
+`https://your-app.vercel.app/auth/callback`.
 
-Every deployable component should have a rollback story.
-
-### Web
-
-Redeploy previous build/version.
-
-### FastAPI Lambda
-
-Point alias back to previous Lambda version or redeploy previous artifact.
-
-### Agent
-
-Keep previous known-good agent artifact/config and redeploy it.
-
-### Database
-
-Prefer forward-compatible migrations.
-
-Do not rely on destructive down migrations as the primary production rollback plan.
-
-### Infrastructure
-
-Review Terraform plans carefully. Re-applying old code is not guaranteed to reverse every infrastructure mutation safely.
-
----
-
-# Database Migrations
-
-Recommended pattern:
-
-```text
-expand
-deploy compatible app
-migrate data
-contract later
-```
-
-Avoid schema changes that require all services to switch atomically.
-
----
-
-# CI/CD Mapping
-
-```text
-.github/workflows/
-├── ci.yml              every PR and push: lint, types, unit, contracts-in-sync,
-│                       terraform fmt/validate, integration; evals and E2E when
-│                       targeting staging or main
-├── deploy.yml          reusable pipeline, called by the three below
-├── deploy-dev.yml      push to dev
-├── deploy-staging.yml  push to staging, then staging-check
-└── deploy-prod.yml     push to main, behind the protected environment
-```
-
-## Credentials
-
-Deploys assume a role via GitHub OIDC. There are no long-lived AWS access keys
-in GitHub secrets.
-
-Per environment, configure:
-
-| Kind | Name | Purpose |
-|---|---|---|
-| secret | `AWS_DEPLOY_ROLE_ARN` | role assumed via OIDC |
-| secret | `TF_STATE_BUCKET` | remote state bucket |
-| secret | `TF_LOCK_TABLE` | state lock table |
-| secret | `WORKOS_CLIENT_ID` | that environment's WorkOS client |
-| variable | `AWS_REGION`, `CORS_ORIGINS`, `APP_URL` | non-sensitive configuration |
-| variable | `WEB_DEPLOY_COMMAND` | your web host's deploy command |
-
-Use GitHub Environments named `dev`, `staging` and `production`, and put
-required reviewers on `production` — `deploy.yml` runs `terraform plan` before
-the gate, so a human sees the plan before the apply.
-
----
-
-# Deployment Commands
-
-Human-friendly commands:
+## 4. Verify
 
 ```bash
-make deploy-dev
-make deploy-staging
-make deploy-prod
+curl https://your-backend.fly.dev/health
+curl https://your-backend.fly.dev/agent/ping
 ```
 
-Lower-level:
+Then the part worth doing, because it is what the MCP boundary buys you — point
+an MCP client at the deployed server and confirm the *same* tools your own chat
+UI uses are available to it:
 
-```bash
-make terraform-plan ENV=staging
-make terraform-apply ENV=staging
-make api-deploy ENV=staging
-make agent-deploy ENV=staging
-make mcp-deploy ENV=staging
-make web-deploy ENV=staging
-make smoke ENV=staging
+```json
+{
+  "mcpServers": {
+    "plan-my-evening": {
+      "url": "https://your-backend.fly.dev/mcp"
+    }
+  }
+}
 ```
 
-Production commands should require an explicit environment and confirmation in CI.
+If the tools list is empty or every call fails, check `MCP_ALLOWED_HOSTS`
+first — a 421 is the usual cause.
 
----
+## Order of operations
 
-# Staging Validation
+Migrations → backend → web. The web app reads `API_BASE_URL` at request time, so
+it can be deployed against a backend that is already up; doing it the other way
+means a window where the UI points at nothing.
 
-Before validating a staging release:
+## Rollback
 
-```bash
-git checkout staging
-git pull
-make smoke ENV=staging
-make staging-check ENV=staging
-```
+| Layer | How |
+|---|---|
+| Web | Vercel keeps every deployment — promote the previous one. |
+| Backend | `fly releases` / `fly deploy --image <previous>`; Render has a rollback button. |
+| Database | `alembic downgrade -1`, and only when the migration is genuinely reversible. Prefer rolling forward. |
 
-`staging-check` should validate:
-
-- web loads,
-- login works,
-- agent responds,
-- streaming works,
-- MCP tools work,
-- map renders,
-- test itinerary can be created,
-- persistence works,
-- observability/traces are available.
-
-Have deterministic fallback fixture data so a third-party event API outage does not block end-to-end validation.
+Because migrations are applied ahead of the code, rolling the backend back one
+release is safe: the schema is a superset of what the older code expects.
