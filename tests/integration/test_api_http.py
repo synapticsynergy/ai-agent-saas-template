@@ -57,14 +57,14 @@ async def client_as():
 
 
 class TestHealth:
-    async def test_readiness_reports_every_dependency(self, client_as) -> None:
+    async def test_readiness_reports_the_database(self, client_as) -> None:
         async with client_as(None) as client:
             response = await client.get("/health/ready")
 
         body = response.json()
-        assert body["checks"]["database"] is True
-        assert body["checks"]["storage"] is True
         assert response.status_code == 200
+        assert body["status"] == "ok"
+        assert body["checks"] == {"database": True}
 
 
 class TestPlansOverHttp:
