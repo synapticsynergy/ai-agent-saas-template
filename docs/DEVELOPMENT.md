@@ -9,9 +9,8 @@ Node package manager     pnpm
 Python package manager   uv
 Containers               Docker Compose
 AWS local emulator       LocalStack
-Agent local runtime      AgentCore CLI
-Infrastructure           Terraform
 Task runner              Make
+Infrastructure           Terraform (only for the advanced/ AWS path)
 ```
 
 ## Environment Files
@@ -60,7 +59,7 @@ Invalid API configuration:
 ### Cloud environments
 
 Do not use a `.env` file. Terraform writes the database connection strings to
-Secrets Manager, and the Lambda functions read configuration from their
+Secrets Manager, and the deployed services read configuration from their
 environment. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
@@ -85,9 +84,7 @@ Expected to run approximately:
 
 ```bash
 pnpm --dir apps/web install
-uv sync --project services/api
-uv sync --project services/agent
-uv sync --project services/mcp
+uv sync --project services/backend
 ```
 
 ---
@@ -145,14 +142,14 @@ Use LocalStack for conventional AWS resources where emulation improves the dev/t
 - SQS/SNS if added later
 - Terraform validation against a local AWS-compatible endpoint
 
-Do not make the project dependent on LocalStack for AgentCore behavior.
+Do not make the project dependent on LocalStack for model or agent behavior.
 
 Recommended Terraform flow:
 
 ```bash
-lstk terraform -chdir=infra/terraform/envs/local init
-lstk terraform -chdir=infra/terraform/envs/local plan
-lstk terraform -chdir=infra/terraform/envs/local apply
+lstk terraform -chdir=advanced/infra/terraform/envs/local init
+lstk terraform -chdir=advanced/infra/terraform/envs/local plan
+lstk terraform -chdir=advanced/infra/terraform/envs/local apply
 ```
 
 If local Terraform does not add value for a particular project, Docker Compose + application-level configuration is acceptable.
@@ -161,26 +158,21 @@ If local Terraform does not add value for a particular project, Docker Compose +
 
 # Agent Development
 
-Run the agent locally using AgentCore CLI:
+The agent is mounted on the backend at `/agent`, so it starts with everything
+else:
 
 ```bash
-cd services/agent
-agentcore dev
+make backend-dev
+curl http://localhost:8000/agent/ping
 ```
 
-Run with logs:
+To exercise it directly, POST an AG-UI `RunAgentInput` to
+`/agent/invocations` and read the SSE stream. The web app does this through the
+CopilotKit runtime route, which is also where the caller's identity is attached
+— the agent never trusts a client-supplied one.
 
-```bash
-agentcore dev --logs
-```
-
-Invoke the local dev server with streaming:
-
-```bash
-agentcore dev "Plan a simple evening" --stream
-```
-
-The exact CLI arguments can evolve, so keep this document aligned with the AgentCore CLI version pinned by the project.
+With `AGENT_MODEL_PROVIDER=scripted` there is no model call at all, which is
+what makes the end-to-end suite and the evals free and deterministic.
 
 ---
 
@@ -203,18 +195,18 @@ streaming, authorization) is identical across providers.
 
 # MCP Development
 
-Run the MCP server independently:
+The MCP server is mounted on the backend at `/mcp`:
 
 ```bash
-cd services/mcp
-uv run python server.py
+make backend-dev
 ```
 
-or:
+Point any MCP client at `http://localhost:8000/mcp` — that is the same URL a
+deployed Claude Desktop config would use, which is the whole reason the tools
+sit behind the protocol rather than being called directly.
 
-```bash
-make mcp-dev
-```
+If a client gets a 421, the transport is rejecting its `Host` header. Add the
+host to `MCP_ALLOWED_HOSTS`; it is DNS-rebinding protection, not a bug.
 
 Keep MCP tools testable without the LLM.
 
@@ -235,7 +227,7 @@ async def test_search_events():
 # FastAPI Development
 
 ```bash
-cd services/api
+cd services/backend
 uv run fastapi dev app/main.py
 ```
 
@@ -308,9 +300,7 @@ Suggested:
 
 ```text
 apps/web/Dockerfile
-services/api/Dockerfile
-services/agent/Dockerfile
-services/mcp/Dockerfile
+services/backend/Dockerfile
 ```
 
 Goals:
@@ -347,8 +337,8 @@ easily; the Dockerfiles exist for CI parity, container deployment and for
 reproducing a dependency problem that only appears in an image.
 
 The agent is included in Compose so `docker compose up` yields a complete
-working stack without the AgentCore CLI installed. For work that needs AgentCore
-Runtime parity, use `make agent-dev` instead.
+working stack. The API, the agent and the MCP server are one container
+(ADR-009), reachable at `/`, `/agent` and `/mcp` on port 8000.
 
 ---
 
@@ -401,9 +391,7 @@ Avoid making the live demo completely dependent on a flaky third-party service.
 make install
 make dev
 make web-dev
-make api-dev
-make agent-dev
-make mcp-dev
+make backend-dev
 
 make infra-up
 make infra-down

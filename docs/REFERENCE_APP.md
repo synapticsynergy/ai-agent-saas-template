@@ -120,15 +120,16 @@ UI confirms saved state
 ```text
 Next.js / CopilotKit / WorkOS
           │
-      ┌───┴────┐
-      ▼        ▼
- FastAPI     AgentCore
- Lambda      Strands
-      │        │
-      │       MCP
-      │        ▼
-      │    Gateway / Tools
-      └──────┬─┘
+      ┌───┴─────┐
+      ▼         ▼
+ FastAPI      Agent  /agent
+ /plans       Anthropic SDK
+      │         │
+      │        MCP
+      │         ▼
+      │     MCP server  /mcp
+      │     tools + ui:// resource
+      └──────┬──┘
              ▼
         Persistence
 ```

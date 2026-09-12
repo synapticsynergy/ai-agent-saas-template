@@ -80,7 +80,7 @@ and repoints the function. A release is therefore not an infrastructure change:
 **AgentCore Runtime.** Owned by the AgentCore CLI. Terraform outputs the API
 URL, MCP endpoint and bucket name; `scripts/deploy/agent.sh` reads them and
 passes them to `agentcore deploy`. See
-[ADR-006](adr/ADR-006-agentcore-owns-its-own-resources.md).
+[ADR-006](../docs/adr/ADR-006-agentcore-owns-its-own-resources.md).
 
 **The web host.** Deliberately unchosen — Next.js deploys well to several
 places and the right answer depends on the product. `scripts/deploy/web.sh`

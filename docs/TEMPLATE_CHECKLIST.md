@@ -18,7 +18,7 @@ in one pass. Fix anything broken here before renaming things.
 ## Rename
 
 - [ ] application name — `apps/web/src/app/layout.tsx` metadata, `AppShell`
-- [ ] Terraform `project` variable in each `infra/terraform/envs/*/variables.tf`
+- [ ] Terraform `project` variable in each `advanced/infra/terraform/envs/*/variables.tf`
 - [ ] AWS region defaults in the same files
 - [ ] WorkOS environment per deployment (never reuse production credentials)
 - [ ] domains and `CORS_ORIGINS`
@@ -33,8 +33,8 @@ build around. Replacing it means:
 - [ ] define the primary job-to-be-done
 - [ ] define one reference agent workflow
 - [ ] replace the domain contracts in `packages/contracts/src/saas_contracts/`
-- [ ] replace the deterministic workflow in `services/agent/agent_app/workflows/`
-- [ ] replace the tools in `services/mcp/mcp_server/tools/`
+- [ ] replace the deterministic workflow in `services/backend/agent_app/workflows/`
+- [ ] replace the tools in `services/backend/mcp_server/tools/`
 - [ ] replace the fixture dataset in `saas_contracts/fixtures/data.json`
 - [ ] define your human approval points
 - [ ] decide whether an MCP App UI adds value for your domain
@@ -88,7 +88,7 @@ For every proposed MCP capability ask:
 - [ ] `docker-compose.yml`
 - [ ] Postgres container
 - [ ] LocalStack if useful
-- [ ] AgentCore local dev command
+- [ ] the backend's local dev command
 - [ ] seed fixtures
 - [ ] one-command startup
 

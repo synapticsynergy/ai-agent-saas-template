@@ -21,13 +21,13 @@ Test deterministic functions without infrastructure.
 
 | What | Where |
 |---|---|
-| Permission helpers | `services/api/tests/test_permissions.py` |
-| Configuration guards | `services/api/tests/test_config.py` |
-| Access-token verification | `services/api/tests/test_workos_auth.py` |
+| Permission helpers | `services/backend/tests/api/test_permissions.py` |
+| Configuration guards | `services/backend/tests/api/test_config.py` |
+| Access-token verification | `services/backend/tests/api/test_workos_auth.py` |
 | Geospatial helpers | `packages/contracts/tests/test_geo.py` |
-| Candidate scoring, budget allocation | `services/agent/tests/test_scoring.py` |
-| Itinerary construction | `services/agent/tests/test_planner.py` |
-| Request parsing, revision | `services/agent/tests/test_parse_and_replan.py` |
+| Candidate scoring, budget allocation | `services/backend/tests/agent/test_scoring.py` |
+| Itinerary construction | `services/backend/tests/agent/test_planner.py` |
+| Request parsing, revision | `services/backend/tests/agent/test_parse_and_replan.py` |
 | Web formatting and state narrowing | `apps/web/src/lib/*.test.ts` |
 
 None of these need a container, a network or a model.
@@ -50,7 +50,7 @@ pnpm --dir apps/web test
 
 Test FastAPI service/business logic.
 
-Live in `services/api/tests/test_plan_service.py` and `test_routes.py`.
+Live in `services/backend/tests/api/test_plan_service.py` and `test_routes.py`.
 
 ```python
 async def test_viewer_cannot_create_a_plan(session, viewer):
@@ -78,7 +78,7 @@ Test:
 - tenant scope,
 - idempotency.
 
-Live in `services/mcp/tests/`. Every tool is called directly — no LLM, no MCP
+Live in `services/backend/tests/mcp/`. Every tool is called directly — no LLM, no MCP
 transport — and asserted on its contract.
 
 ```text
@@ -145,7 +145,7 @@ affordable option.
 Run with `make eval`, or a single case with:
 
 ```bash
-uv run --project services/agent python -m evals.run --case replan_under_tighter_budget
+uv run --project services/backend python -m evals.run --case replan_under_tighter_budget
 ```
 
 ---
@@ -170,10 +170,12 @@ make test-integration
 | `test_api_http.py` | the ASGI app end to end, including a forged `organization_id` in the body |
 | `test_mcp_server.py` | a live MCP server over streamable HTTP: handshake, tool schemas, the `ui://` resource, and an unauthenticated `save_plan` |
 
-The MCP server is launched as a subprocess in its own uv project, because it
-cannot share a virtualenv with the rest of the suite — the Strands SDK pins
-`mcp<2.2` while the server needs `mcp>=2.2`. That mirrors how it deploys: a
-separate deployable with its own dependencies.
+The backend is launched as a subprocess on a free port, so these go over real
+HTTP rather than calling the tool functions — what is under test is the
+transport. It used to be launched in its own uv project because it could not
+share a virtualenv with the rest of the suite (Strands pinned `mcp<2.2`, the
+server needed `mcp>=2.2`); dropping Strands removed that (ADR-009), but the
+subprocess stays, because in-process would not exercise the transport.
 
 ---
 
@@ -252,7 +254,7 @@ The prompt is not a security control.
 Run:
 
 ```bash
-terraform fmt -check -recursive infra/terraform
+terraform fmt -check -recursive advanced/infra/terraform
 terraform validate
 ```
 

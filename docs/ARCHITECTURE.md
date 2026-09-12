@@ -29,16 +29,28 @@ The architecture optimizes for:
                   normal   │        │ agent
                   requests │        │ interactions
                            ▼        ▼
-                 ┌────────────┐   ┌─────────────────┐
-                 │ FastAPI    │   │ AgentCore       │
-                 │ Lambda     │   │ Runtime         │
-                 └─────┬──────┘   └────────┬────────┘
-                       │                   │
-                       ▼                   ▼
-                 ┌────────────┐      ┌──────────────┐
-                 │ Persistence│◄─────│ MCP/Gateway  │
-                 └────────────┘      └──────────────┘
+         ┌─────────────────────────────────────────────────┐
+         │ services/backend — one process, three packages   │
+         │                                                  │
+         │  ┌────────────┐              ┌────────────────┐  │
+         │  │ FastAPI    │              │ Agent  /agent  │  │
+         │  │ /plans     │              │ Anthropic SDK  │  │
+         │  └─────┬──────┘              └───────┬────────┘  │
+         │        │                             │           │
+         │        │                             ▼           │
+         │        │                     ┌────────────────┐  │
+         │        │◄────────────────────│ MCP    /mcp    │  │
+         │        │  verified bearer    └────────────────┘  │
+         └────────┼──────────────────────────────────────────┘
+                  ▼
+            ┌────────────┐
+            │ Persistence│
+            └────────────┘
 ```
+
+Sharing a process is a deployment decision, not a coupling: the agent reaches
+its tools over MCP at a URL, and every hop verifies identity independently.
+See [ADR-009](adr/ADR-009-one-backend-deployable.md).
 
 ## Responsibility Boundaries
 
@@ -92,7 +104,7 @@ Examples:
 
 FastAPI should remain useful but boring.
 
-### AgentCore Runtime
+### The agent (`/agent`)
 
 Owns execution of nondeterministic agent workloads:
 
@@ -104,13 +116,13 @@ Owns execution of nondeterministic agent workloads:
 - agent lifecycle,
 - memory/tracing integrations.
 
-### Strands Agent
-
-Owns agent behavior and orchestration.
+It calls Claude through the Anthropic SDK — the Claude API directly, or Bedrock
+through the Mantle endpoint. Both are the same code path; the provider changes
+cost and setup, not behaviour.
 
 Prefer small tools with narrow contracts rather than a giant `do_everything()` function.
 
-### MCP / AgentCore Gateway
+### MCP (`/mcp`)
 
 MCP is the interoperability boundary for capabilities.
 
@@ -121,12 +133,14 @@ Agent
   ↓
 MCP client
   ↓
-AgentCore Gateway
+MCP server  (/mcp on the backend)
   ↓
-tool target / MCP server / API
+tool target / API
 ```
 
-Gateway provides a consolidated location for tool discovery and invocation.
+The same endpoint serves any other MCP client — Claude Desktop, VS Code — which
+is what the protocol boundary buys. If the tools only ever shipped with this
+agent, calling the functions directly would be the honest simplification.
 
 ### MCP Apps
 
@@ -270,16 +284,16 @@ trace_id
 
 # Streaming Architecture
 
-Do not force the normal FastAPI Lambda service to proxy model output.
+Do not force the deterministic API routes to proxy model output. Sharing a
+process does not change this: the agent has its own mount and its own streaming
+path.
 
 Preferred path:
 
 ```text
-Bedrock/model
+Claude (Claude API or Bedrock)
    ↓
-Strands
-   ↓
-AgentCore Runtime
+agent_app  (/agent, SSE)
    ↓
 CopilotKit / AG-UI
    ↓
@@ -367,8 +381,8 @@ The starter intentionally avoids premature scale complexity.
 Stateless layers:
 
 - Next.js application instances,
-- FastAPI Lambda,
-- AgentCore Runtime endpoints,
+- the application API,
+- the agent's streaming endpoint,
 - MCP service replicas.
 
 Durable state:
@@ -376,7 +390,7 @@ Durable state:
 - Postgres,
 - S3,
 - optional DynamoDB,
-- AgentCore memory where appropriate.
+- durable agent memory where appropriate.
 
 Scale each independently.
 
@@ -394,12 +408,13 @@ Agent            → agentcore dev
 MCP              → local process/container
 
 CLOUD
-Next.js          → selected production hosting
-FastAPI          → API Gateway + Lambda
-Postgres         → RDS/Aurora or selected managed Postgres
-S3               → AWS S3
-Agent            → AgentCore Runtime
-MCP/Gateway      → AgentCore Gateway / hosted MCP
+Next.js              → Vercel
+Backend (all three)  → one container: Fly, Render, Cloud Run, ECS
+Postgres             → Neon, RDS/Aurora, or any managed Postgres
+S3                   → AWS S3
+
+The AWS path — Lambda, AgentCore, RDS in a VPC — is preserved under
+advanced/ for when the split earns its cost.
 ```
 
 Local development should preserve contracts, not perfectly reproduce managed infrastructure internals.

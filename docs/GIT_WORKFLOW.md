@@ -160,7 +160,7 @@ feat: add route optimization
 fix: enforce tenant scope on saved plans
 refactor: isolate event provider
 test: add tool authorization cases
-docs: document AgentCore deployment
+docs: document the backend deploy path
 chore: upgrade dependencies
 ```
 

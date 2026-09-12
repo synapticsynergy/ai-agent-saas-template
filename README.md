@@ -7,16 +7,14 @@ The template is intentionally opinionated around:
 - **Next.js + TypeScript + Material UI** for the product UI
 - **CopilotKit / AG-UI** for agent ↔ UI interaction and streaming
 - **WorkOS AuthKit** for authentication, organizations, and RBAC
-- **FastAPI + Python** for deterministic application APIs and persistence
-- **Amazon Bedrock AgentCore Runtime** for agent execution
-- **Strands Agents** for Python agent orchestration
-- **MCP / AgentCore Gateway** for tools and interoperable agent capabilities
+- **FastAPI + Python** for deterministic application APIs, the agent, and MCP
+- **Anthropic SDK** for model calls, against the Claude API or Amazon Bedrock
+- **MCP** for tools, including an MCP Apps `ui://` resource
 - **Leaflet + OpenStreetMap** for the itinerary map
 - **Postgres, S3, and optional DynamoDB** for application persistence
-- **Terraform** for AWS infrastructure as code
-- **Docker Compose + LocalStack** for fast local development of conventional AWS services
-- **AgentCore CLI** for local agent development and deployment
-- **GitHub Actions** for CI/CD
+- **Docker Compose + LocalStack** for fast local development
+- **Vercel + a container host** for deployment; Terraform/AWS under `advanced/`
+- **GitHub Actions** for CI
 
 The project is designed to make new AI-agent SaaS applications quick to bootstrap while keeping architectural decisions explicit, testable, and understandable to contributors.
 
@@ -66,23 +64,37 @@ The point is not to build a nightlife platform. The point is to exercise the reu
                         ┌────────────────────────┴───────────────────────┐
                         │                                                │
                         ▼                                                ▼
-             ┌──────────────────────┐                        ┌──────────────────────┐
-             │ Deterministic API    │                        │ Agent Runtime        │
-             │                      │                        │                      │
-             │ API Gateway          │                        │ AgentCore Runtime    │
-             │ FastAPI on Lambda    │                        │ Strands Agent        │
-             └──────────┬───────────┘                        └──────────┬───────────┘
-                        │                                               │
-                        │                                               │ MCP
-                        ▼                                               ▼
-             ┌──────────────────────┐                        ┌──────────────────────┐
-             │ Application Data    │                        │ Tool Layer           │
-             │                      │                        │                      │
-             │ Postgres            │◄───────────────────────│ AgentCore Gateway    │
-             │ S3                  │                        │ MCP Servers          │
-             │ DynamoDB (optional) │                        │ External APIs        │
-             └──────────────────────┘                        └──────────────────────┘
+           ┌─────────────────────────────────────────────────────────────┐
+           │  services/backend — one deployable, three packages           │
+           │                                                              │
+           │  ┌────────────────────┐          ┌────────────────────────┐  │
+           │  │ Deterministic API  │          │ Agent        /agent    │  │
+           │  │ /plans /users/me   │          │ Anthropic SDK          │  │
+           │  │ FastAPI            │          │ AG-UI over SSE         │  │
+           │  └─────────┬──────────┘          └───────────┬────────────┘  │
+           │            │                                 │ MCP           │
+           │            │                                 ▼               │
+           │            │                     ┌────────────────────────┐  │
+           │            │                     │ MCP server   /mcp      │  │
+           │            │◄────────────────────│ tools + ui:// resource │  │
+           │            │   verified bearer   └───────────┬────────────┘  │
+           └────────────┼─────────────────────────────────┼───────────────┘
+                        ▼                                 ▼
+             ┌──────────────────────┐          ┌──────────────────────┐
+             │ Application Data     │          │ External APIs        │
+             │ Postgres / S3        │          │ places, events       │
+             │ DynamoDB (optional)  │          │ (fixtures by default)│
+             └──────────────────────┘          └──────────────────────┘
+
+                    Any MCP client — Claude Desktop, VS Code —
+                    connects to the same /mcp endpoint.
 ```
+
+The three packages share a process but not a trust relationship: the agent
+reaches its tools over MCP at a URL, and `save_plan` forwards the caller's
+bearer token to the API, which verifies it independently. Splitting them into
+separate deployables is configuration, not a rewrite — see
+[ADR-009](docs/adr/ADR-009-one-backend-deployable.md), which supersedes ADR-001.
 
 ### Core design rule
 
@@ -98,7 +110,7 @@ FastAPI owns things that should behave predictably:
 - business rules
 - deterministic integrations
 
-AgentCore owns things that are naturally agentic:
+The agent owns things that are naturally agentic:
 
 - model inference
 - reasoning loops
@@ -119,22 +131,19 @@ ai-agent-saas-template/
 ├── apps/
 │   └── web/                     # Next.js + MUI + CopilotKit + WorkOS
 ├── services/
-│   ├── api/                     # FastAPI application API
-│   ├── agent/                   # Strands agent for AgentCore Runtime
-│   └── mcp/                     # MCP server and MCP App resource
+│   └── backend/                 # API + agent + MCP server; one deployable
 ├── packages/
 │   └── contracts/               # Shared domain contracts + generated types
-├── infra/
-│   └── terraform/
-│       ├── modules/             # networking, database, storage, api, mcp, observability
-│       └── envs/                # local, dev, staging, prod — separate state each
 ├── evals/                       # agent evaluation dataset and runner
 ├── tests/
 │   ├── integration/             # against real Postgres, LocalStack, MCP
 │   └── e2e/                     # Playwright
-├── scripts/                     # dev, deploy and validation scripts
+├── advanced/                    # the AWS path: Terraform, per-service deploys
+├── scripts/                     # dev and validation scripts
 ├── docs/
 ├── docker-compose.yml
+├── fly.toml / render.yaml       # backend hosting
+├── vercel.json                  # web hosting
 ├── Makefile
 └── README.md
 ```
@@ -142,33 +151,36 @@ ai-agent-saas-template/
 ### Where things live
 
 ```text
-services/api/app/
-├── auth/          workos.py (JWT verification), permissions.py, dependencies.py
-├── routes/        thin HTTP layer; maps to services
-├── services/      authorization + tenant scoping live here
-├── persistence/   postgres.py, s3.py, dynamo.py
-├── models/        SQLAlchemy
-├── schemas/       re-exported from packages/contracts
-└── main.py
-
-services/agent/
-├── agent.py                 AgentCore contract: /invocations, /ping
-├── agent_app/
-│   ├── runner.py            orchestration; emits AG-UI events
-│   ├── streaming.py         AG-UI event construction
-│   ├── workflows/           deterministic planning (see ADR-007)
-│   ├── tools/mcp_client.py  MCP client; forwards the caller's token
+services/backend/
+├── asgi.py        composes the three below; the process entry point
+│
+├── app/                       the deterministic API, mounted at /
+│   ├── auth/                  workos.py (JWT verification), permissions.py
+│   ├── routes/                thin HTTP layer; maps to services
+│   ├── services/              authorization + tenant scoping live here
+│   ├── persistence/           postgres.py, s3.py, dynamo.py
+│   ├── models/                SQLAlchemy
+│   ├── schemas/               re-exported from packages/contracts
+│   └── main.py
+│
+├── agent_app/                 the agent, mounted at /agent
+│   ├── asgi.py                /invocations, /ping
+│   ├── runner.py              orchestration; emits AG-UI events
+│   ├── interpreter.py         the only place a model is called
+│   ├── streaming.py           AG-UI event construction
+│   ├── workflows/             deterministic planning (see ADR-007)
+│   ├── tools/mcp_client.py    MCP client; forwards the caller's token
 │   └── prompts/
-└── tests/
-
-services/mcp/
-├── server.py                entry point
-└── mcp_server/
-    ├── server.py            tool and MCP App registration
-    ├── tools/               narrow, typed, individually testable
-    ├── providers/           replaceable adapters; registry selects
-    ├── resources/           the ui:// MCP App document
-    └── context.py           caller identity extraction
+│
+├── mcp_server/                the MCP server, mounted at /mcp
+│   ├── server.py              tool and MCP App registration
+│   ├── tools/                 narrow, typed, individually testable
+│   ├── providers/             replaceable adapters; registry selects
+│   ├── resources/             the ui:// MCP App document
+│   └── context.py             caller identity extraction
+│
+├── alembic/                   migrations
+└── tests/{api,agent,mcp}/
 ```
 
 ### The shared contract
@@ -237,13 +249,11 @@ The model may decide to request a tool call, but deterministic code verifies whe
 ```text
 Browser
   ↓
-Next.js
+Next.js server        (holds the session; the browser never sees a token)
   ↓
-API Gateway
+FastAPI  /plans       (verifies the forwarded bearer token independently)
   ↓
-FastAPI / Lambda
-  ↓
-Service Layer
+Service Layer         (authorization + tenant scoping)
   ↓
 Persistence
   ↓
@@ -257,11 +267,11 @@ Browser
   ↓
 CopilotKit / AG-UI
   ↓
-AgentCore Runtime
+Next.js  /api/copilotkit    (the identity injection boundary)
   ↓
-Strands Agent
+Agent    /agent             (Anthropic SDK; AG-UI events over SSE)
   ↓
-MCP / AgentCore Gateway
+MCP      /mcp               (the same endpoint Claude Desktop would use)
   ↓
 Tools / APIs / application services
 ```
@@ -309,7 +319,7 @@ Use the fastest local substitute for each layer:
 | Next.js | native `pnpm dev` or Docker |
 | FastAPI | native `uv run fastapi dev` or Docker |
 | Postgres | Docker |
-| S3 / DynamoDB / Lambda / API Gateway | LocalStack where useful |
+| S3 / DynamoDB | LocalStack where useful |
 | Agent | `agentcore dev` |
 | MCP server | native Python or Docker |
 | WorkOS | WorkOS development environment |
@@ -353,9 +363,8 @@ See [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md).
 | Node 20.9+ and pnpm | the web app | yes |
 | Python 3.12+ and [uv](https://docs.astral.sh/uv/) | the API, agent and MCP server | yes |
 | Make | the developer interface | yes |
-| Terraform | infrastructure | to deploy |
-| AWS CLI | deployment | to deploy |
-| [AgentCore CLI](https://pypi.org/project/bedrock-agentcore-starter-toolkit/) | AgentCore Runtime parity | optional locally |
+| Docker | local Postgres + LocalStack | yes |
+| Terraform / AWS CLI | only the `advanced/` AWS path | no |
 
 `pnpm` comes with Node: `corepack enable pnpm`.
 
@@ -522,9 +531,8 @@ See [docs/TESTING.md](docs/TESTING.md).
 ### Service guides
 
 - [Web application](apps/web/README.md)
-- [Application API](services/api/README.md)
-- [Agent](services/agent/README.md)
-- [MCP server](services/mcp/README.md)
+- [Backend — API, agent and MCP server](services/backend/README.md)
+- [The AWS path](advanced/README.md)
 
 ---
 
@@ -536,14 +544,14 @@ See [docs/TESTING.md](docs/TESTING.md).
 - [x] WorkOS AuthKit authentication, with an isolated local fixture identity
 - [x] Organizations and permission-based RBAC
 - [x] Tenant isolation enforced in the service layer and covered by tests
-- [x] FastAPI application API on Lambda
+- [x] FastAPI application API
 - [x] Postgres persistence with Alembic migrations
 - [x] S3 object storage with tenant-prefixed keys
 - [ ] Directory Sync / enterprise SSO (WorkOS supports it; not wired up here)
 
 ### Agent
 
-- [x] Strands agent serving the AgentCore Runtime contract
+- [x] Agent on the Anthropic SDK — Claude API or Bedrock, one code path
 - [x] Streaming AG-UI events: run lifecycle, steps, tools, state, approvals
 - [x] CopilotKit runtime with server-side identity injection
 - [x] Shared UI/agent state — the itinerary is application state, not prose
@@ -554,7 +562,7 @@ See [docs/TESTING.md](docs/TESTING.md).
 - [x] Human approval, kept distinct from authorization
 - [x] Agent run and tool-call records for traces and cost
 - [x] Evaluation suite scoring structured outcomes
-- [ ] AgentCore Memory (the agent is stateless across runs by design; see
+- [ ] Durable agent memory (the agent is stateless across runs by design; see
       [ADR-008](docs/adr/ADR-008-conversation-threads-are-not-stored.md))
 
 ### Engineering
