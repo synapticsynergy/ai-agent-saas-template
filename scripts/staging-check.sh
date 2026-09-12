@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 ./scripts/smoke.sh "$ENV_NAME"
 
 echo "==> agent evaluation suite"
-uv run --project services/agent python -m evals.run --threshold "${EVAL_THRESHOLD:-0.8}"
+uv run --project services/backend python -m evals.run --threshold "${EVAL_THRESHOLD:-0.8}"
 
 echo "==> end-to-end suite against $ENV_NAME"
 E2E_BASE_URL="${E2E_BASE_URL:-${NEXT_PUBLIC_APP_URL:-}}" pnpm --filter e2e test

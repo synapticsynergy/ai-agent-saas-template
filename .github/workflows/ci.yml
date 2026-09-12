@@ -120,14 +120,14 @@ jobs:
         with:
           terraform_version: "1.14.5"
 
-      - run: terraform fmt -check -recursive infra/terraform
+      - run: terraform fmt -check -recursive advanced/infra/terraform
 
       - name: Validate every environment
         run: |
           for env in local dev staging prod; do
             echo "==> $env"
-            terraform -chdir=infra/terraform/envs/$env init -backend=false -input=false
-            terraform -chdir=infra/terraform/envs/$env validate
+            terraform -chdir=advanced/infra/terraform/envs/$env init -backend=false -input=false
+            terraform -chdir=advanced/infra/terraform/envs/$env validate
           done
 
   # -------------------------------------------------------------------------
