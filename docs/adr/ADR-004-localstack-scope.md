@@ -1,6 +1,6 @@
 # ADR-004: Use LocalStack Selectively
 
-**Status:** Accepted
+**Status:** Superseded for the default path by [ADR-010](ADR-010-railway-and-vercel.md); still applies under `advanced/`
 
 ## Context
 

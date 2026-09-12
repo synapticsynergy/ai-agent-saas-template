@@ -1,144 +1,148 @@
 # Deployment
 
-Two deploys. The web app goes to Vercel; the backend — the API, the agent and
-the MCP server, which are one ASGI application
-([ADR-009](adr/ADR-009-one-backend-deployable.md)) — goes to any host that runs
-a container.
+Three environments, three branches, two hosts. Push to a branch and its
+environment deploys.
 
-```
-apps/web           → Vercel
-services/backend   → Fly.io or Render
-Postgres           → Neon (or any managed Postgres)
-```
+| Branch    | Backend (Railway environment) | Web (Vercel)             | `APP_ENV` |
+|-----------|-------------------------------|--------------------------|-----------|
+| `dev`     | `dev`                         | preview, branch `dev`    | `dev`     |
+| `staging` | `staging`                     | preview, branch `staging`| `staging` |
+| `main`    | `production`                  | Production               | `prod`    |
 
-The AWS path — Terraform, Lambda, AgentCore, four environments — still exists
-under [`advanced/`](../advanced/README.md), with
-[advanced/DEPLOYMENT.md](../advanced/DEPLOYMENT.md) as its guide. Start here;
-graduate when you have a reason.
+The backend — API, agent and MCP server, one ASGI application
+([ADR-009](adr/ADR-009-one-backend-deployable.md)) — runs as one Railway
+service per environment, with a Railway Postgres beside it. The web app is one
+Vercel project. Nothing here needs an AWS account; that path lives under
+[`advanced/`](../advanced/README.md).
 
-## 1. Database
+## 1. Railway: first environment
 
-Create a Postgres database (Neon's free tier is enough to start) and keep two
-connection strings — the app is async, Alembic is sync:
+1. **New Project → Deploy from GitHub repo**, pick this repository. Railway
+   reads `railway.json` and builds `services/backend/Dockerfile` with the
+   repository root as context. Name the service `backend`.
+2. **+ New → Database → PostgreSQL** in the same environment.
+3. On the `backend` service, **Variables**:
 
-```bash
-DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DB
-DATABASE_SYNC_URL=postgresql+psycopg://USER:PASSWORD@HOST/DB
-```
+   | Variable            | Value                                   |
+   |---------------------|-----------------------------------------|
+   | `APP_ENV`           | `prod`                                  |
+   | `DATABASE_URL`      | `${{Postgres.DATABASE_URL}}`            |
+   | `MCP_ALLOWED_HOSTS` | `${{RAILWAY_PUBLIC_DOMAIN}}`            |
+   | `API_CORS_ORIGINS`  | your production web URL                 |
+   | `WORKOS_API_KEY`    | from WorkOS                             |
+   | `WORKOS_CLIENT_ID`  | from WorkOS                             |
+   | `ANTHROPIC_API_KEY` | secret                                  |
 
-Apply migrations before the backend first starts:
+   `${{...}}` are Railway reference variables; only the last row is typed.
+   `AGENT_MODEL_PROVIDER` defaults to `anthropic`.
+4. **Settings → Networking → Generate Domain**. That hostname is what
+   `MCP_ALLOWED_HOSTS` resolves to.
+5. Rename the environment to `production` and confirm it tracks `main`
+   (**Settings → Environment**).
 
-```bash
-cd services/backend && DATABASE_SYNC_URL=... uv run alembic upgrade head
-```
+Every deploy runs `alembic upgrade head` first (`preDeployCommand` in
+`railway.json`), so the schema always leads the code that reads it. A failed
+migration blocks the deploy; the previous version keeps serving.
 
-Migrations run ahead of the code that reads the schema — expand first, contract
-later — so a deploy never leaves the running version ahead of its database.
+## 2. Railway: staging and dev
 
-## 2. Backend
+**Environments → + New Environment → Duplicate `production`**, named
+`staging`, tracking branch `staging`. Repeat for `dev`. Duplicating copies the
+variables and provisions a fresh Postgres per environment; change `APP_ENV`
+and `API_CORS_ORIGINS` in each copy. Secrets are shared by the copy — rotate
+the Anthropic key per environment if you want separate spend tracking.
 
-Both hosts build `services/backend/Dockerfile` with the repository root as the
-build context, because the service depends on `packages/contracts` by path.
-
-### Fly.io
-
-```bash
-fly launch --copy-config --no-deploy
-fly secrets set \
-  DATABASE_URL=... DATABASE_SYNC_URL=... \
-  ANTHROPIC_API_KEY=... \
-  WORKOS_API_KEY=... WORKOS_CLIENT_ID=...
-fly deploy
-```
-
-`fly.toml` sets `auto_stop_machines = false` on purpose — see the note on
-sleeping below.
-
-### Render
-
-New → Blueprint, pointed at this repository; `render.yaml` describes the
-service. Set the secrets marked `sync: false` in the dashboard.
-
-### Sleeping is the thing to watch
-
-Free instances on both hosts sleep after inactivity and cold-start on the next
-request. That is tolerable behind a browser. It is not tolerable for the MCP
-endpoint: an MCP client such as Claude Desktop connects on its own schedule, and
-a 50-second cold start reads as a broken server rather than a slow one. If the
-MCP endpoint matters to you, pay for an always-on instance.
-
-### `MCP_ALLOWED_HOSTS` is not optional
-
-The MCP transport rejects any `Host` header it was not told to expect, with a
-421 — DNS-rebinding protection. Set it to the hostname clients actually use:
+Then create the branches:
 
 ```bash
-MCP_ALLOWED_HOSTS=your-backend.fly.dev
+git checkout main && git pull
+git branch dev && git branch staging
+git push origin dev staging
 ```
 
-Configuration refuses to start outside `APP_ENV=local` without it, because the
-alternative failure mode is a server that runs happily and refuses every client.
+## 3. Vercel
 
-## 3. Web
+Connect the repository once; `vercel.json` carries the monorepo build wiring.
+Production tracks `main`. Every other branch deploys as a preview; `dev` and
+`staging` get stable aliases of the form
+`<project>-git-<branch>-<team>.vercel.app`.
+
+**Settings → Environment Variables.** Set the Production values, then add the
+same names for Preview scoped to branch `staging`, and again scoped to `dev`:
+
+| Variable                | Production            | Preview `staging`       | Preview `dev`           |
+|-------------------------|-----------------------|-------------------------|-------------------------|
+| `APP_ENV`               | `production`          | `staging`               | `dev`                   |
+| `API_BASE_URL`          | production backend URL| staging backend URL     | dev backend URL         |
+| `AGENT_BASE_URL`        | `<API_BASE_URL>/agent`| same pattern            | same pattern            |
+| `NEXT_PUBLIC_APP_URL`   | production web URL    | staging branch alias    | dev branch alias        |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_REDIRECT_URI`, `WORKOS_COOKIE_PASSWORD` | per WorkOS environment | per WorkOS environment | per WorkOS environment |
+
+`NEXT_PUBLIC_*` variables are inlined at **build** time; changing one needs a
+redeploy. `WORKOS_REDIRECT_URI` must exactly match what WorkOS has configured
+for that environment: `<NEXT_PUBLIC_APP_URL>/auth/callback`.
+
+## 4. Verify each environment
 
 ```bash
-pnpm --filter web exec vercel deploy --prod
+SMOKE_API_URL=https://<backend-host> SMOKE_WEB_URL=https://<web-host> make smoke ENV=staging
 ```
 
-or connect the repository in Vercel's dashboard; `vercel.json` has the monorepo
-build wiring. Set these in the Vercel project:
-
-| Variable | Value |
-|---|---|
-| `APP_ENV` | `production` |
-| `API_BASE_URL` | `https://your-backend.fly.dev` |
-| `AGENT_BASE_URL` | `https://your-backend.fly.dev/agent` |
-| `NEXT_PUBLIC_APP_URL` | your Vercel URL |
-| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_REDIRECT_URI`, `WORKOS_COOKIE_PASSWORD` | from the WorkOS dashboard |
-
-`NEXT_PUBLIC_*` variables are inlined at **build** time, so changing one
-requires a redeploy, not just a restart.
-
-`WORKOS_REDIRECT_URI` must exactly match the redirect configured in WorkOS —
-`https://your-app.vercel.app/auth/callback`.
-
-## 4. Verify
+or by hand:
 
 ```bash
-curl https://your-backend.fly.dev/health
-curl https://your-backend.fly.dev/agent/ping
+curl https://<backend-host>/health
+curl https://<backend-host>/agent/ping
+curl -i https://<backend-host>/mcp        # 400 = reachable; 421 = MCP_ALLOWED_HOSTS is wrong
 ```
 
-Then the part worth doing, because it is what the MCP boundary buys you — point
-an MCP client at the deployed server and confirm the *same* tools your own chat
-UI uses are available to it:
+Then point an MCP client at the deployed server and confirm the same tools your
+chat UI uses are listed:
 
 ```json
 {
   "mcpServers": {
-    "plan-my-evening": {
-      "url": "https://your-backend.fly.dev/mcp"
-    }
+    "plan-my-evening": { "url": "https://<backend-host>/mcp" }
   }
 }
 ```
 
-If the tools list is empty or every call fails, check `MCP_ALLOWED_HOSTS`
-first — a 421 is the usual cause.
+### `MCP_ALLOWED_HOSTS` is not optional
+
+The MCP transport rejects any `Host` header it was not told to expect with a
+421 — DNS-rebinding protection. `${{RAILWAY_PUBLIC_DOMAIN}}` keeps it correct;
+if you add a custom domain, add it here too (comma-separated).
+
+### Sleeping is the thing to watch
+
+Railway's trial and hobby plans can sleep an idle service. A browser tolerates
+the cold start; an MCP client such as Claude Desktop, which connects on its own
+schedule, reads it as a broken server. If the MCP endpoint matters, keep the
+service always-on (**Settings → App Sleeping** off).
 
 ## Order of operations
 
-Migrations → backend → web. The web app reads `API_BASE_URL` at request time, so
-it can be deployed against a backend that is already up; doing it the other way
-means a window where the UI points at nothing.
+Migrations → backend → web, and Railway does the first two for you. The web app
+reads `API_BASE_URL` at request time, so it can deploy against a backend that
+is already up.
 
 ## Rollback
 
-| Layer | How |
-|---|---|
-| Web | Vercel keeps every deployment — promote the previous one. |
-| Backend | `fly releases` / `fly deploy --image <previous>`; Render has a rollback button. |
-| Database | `alembic downgrade -1`, and only when the migration is genuinely reversible. Prefer rolling forward. |
+| Layer    | How |
+|----------|-----|
+| Web      | Vercel keeps every deployment — promote the previous one. |
+| Backend  | Railway **Deployments → ⋯ → Redeploy** on the previous deployment. |
+| Database | `alembic downgrade -1`, only when the migration is genuinely reversible. Prefer rolling forward. |
 
-Because migrations are applied ahead of the code, rolling the backend back one
-release is safe: the schema is a superset of what the older code expects.
+Because migrations run ahead of the code, rolling the backend back one release
+is safe: the schema is a superset of what the older code expects.
+
+## Promotion
+
+`dev → staging → main` by pull request, as in
+[GIT_WORKFLOW.md](GIT_WORKFLOW.md). CI runs evals and end-to-end tests on PRs
+into `staging` and `main`. After a staging deploy:
+
+```bash
+SMOKE_API_URL=https://<staging-backend> NEXT_PUBLIC_APP_URL=https://<staging-web> make staging-check ENV=staging
+```
