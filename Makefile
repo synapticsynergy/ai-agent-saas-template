@@ -94,8 +94,8 @@ backend-dev: ## Run the API + agent + MCP server on :8000
 # ---------------------------------------------------------------------------
 
 .PHONY: infra-up
-infra-up: ## Start Postgres + LocalStack and apply migrations
-	docker compose up -d postgres localstack
+infra-up: ## Start Postgres and apply migrations
+	docker compose up -d postgres
 	@./scripts/wait-for-postgres.sh
 	@$(MAKE) --no-print-directory db-migrate
 
@@ -183,7 +183,7 @@ test-unit: ## Unit + service + tool-contract tests (no external infrastructure)
 	$(PNPM) --filter web test
 
 .PHONY: test-integration
-test-integration: ## Integration tests against local Postgres + LocalStack + MCP
+test-integration: ## Integration tests against local Postgres + MCP
 	@./scripts/require-infra.sh
 	$(UV) run --project $(BACKEND) pytest tests/integration -q
 

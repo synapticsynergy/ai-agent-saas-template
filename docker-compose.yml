@@ -1,6 +1,6 @@
 # Local development topology.
 #
-#   make infra-up     → postgres + localstack only (recommended; run apps natively)
+#   make infra-up     → postgres only (recommended; run apps natively)
 #   docker compose up → everything, including the app services
 #
 # The API, the agent and the MCP server are one ASGI application and one
@@ -26,26 +26,6 @@ services:
       timeout: 5s
       retries: 20
 
-  localstack:
-    image: localstack/localstack:4
-    restart: unless-stopped
-    environment:
-      # Only the conventional AWS services the template actually uses.
-      # AgentCore is deliberately NOT emulated here — see docs/adr/ADR-004.
-      SERVICES: s3,dynamodb,lambda,apigateway,iam,logs,sts,ssm
-      DEBUG: "0"
-      PERSISTENCE: "0"
-    ports:
-      - "4566:4566"
-    volumes:
-      - ./scripts/localstack:/etc/localstack/init/ready.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 20s
-
   backend:
     build:
       context: .
@@ -57,9 +37,7 @@ services:
         required: false
     environment:
       APP_ENV: ${APP_ENV:-local}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app}
-      DATABASE_SYNC_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app}
-      AWS_ENDPOINT_URL: http://localstack:4566
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app}
       API_CORS_ORIGINS: http://localhost:3000
       # In-process, but still addressed over HTTP so the agent keeps talking to
       # its tools exactly as it would against a standalone MCP server.
@@ -78,8 +56,6 @@ services:
       - ./packages/contracts:/app/packages/contracts:ro
     depends_on:
       postgres:
-        condition: service_healthy
-      localstack:
         condition: service_healthy
 
   web:

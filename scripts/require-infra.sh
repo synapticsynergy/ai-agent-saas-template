@@ -6,7 +6,6 @@ cd "$(dirname "$0")/.."
 
 missing=()
 docker compose ps --status running --services 2>/dev/null | grep -q '^postgres$'   || missing+=("postgres")
-docker compose ps --status running --services 2>/dev/null | grep -q '^localstack$' || missing+=("localstack")
 
 if [ ${#missing[@]} -gt 0 ]; then
   echo "ERROR: integration tests require local infrastructure: ${missing[*]}" >&2
