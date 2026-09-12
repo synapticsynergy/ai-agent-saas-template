@@ -439,17 +439,11 @@ Push to a branch and its environment deploys. Full guide:
 Railway runs `alembic upgrade head` before each deploy, so the schema always
 leads the code.
 
-There is deliberately no `make deploy` wrapper. Each of these talks to a
-different account, and a Make target that hides which one is a bad trade for
-three saved keystrokes.
-
-For team use, prefer deploying from CI after branch protection and required
-checks rather than from a developer's machine.
+There is no deploy command to run: CI gates the merge, and Railway and Vercel
+deploy the branch. Promotion is `dev → staging → main` by pull request.
 
 The AWS path — Terraform, four environments, per-service deploys — lives in
 [`advanced/`](advanced/README.md).
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 
