@@ -276,23 +276,18 @@ backend-image: ## Build the deployable backend image
 # Deployment
 # ---------------------------------------------------------------------------
 #
-# Two deploys: the backend as a container, the web app to Vercel. Neither is
-# wrapped in a Make target that hides which account it is talking to — see
-# docs/DEPLOYMENT.md. The AWS path (Terraform, Lambda, AgentCore, four
-# environments) is preserved under advanced/.
+# Railway deploys the backend and Vercel deploys the web app, both on branch
+# push, so there is no deploy target here — see docs/DEPLOYMENT.md. The AWS path
+# (Terraform, Lambda, AgentCore) is preserved under advanced/.
 
 .PHONY: deploy-help
 deploy-help: ## Show the deploy commands
-	@echo "Backend (pick one):"
-	@echo "  fly deploy"
-	@echo "  render: New -> Blueprint, or push to the connected branch"
+	@echo "Deploys happen on push:"
+	@echo "  dev      -> Railway env 'dev'        + Vercel preview"
+	@echo "  staging  -> Railway env 'staging'    + Vercel preview"
+	@echo "  main     -> Railway env 'production' + Vercel production"
 	@echo ""
-	@echo "Web:"
-	@echo "  pnpm --filter web exec vercel deploy --prod"
-	@echo ""
-	@echo "Migrations run first:"
-	@echo "  cd $(BACKEND) && uv run alembic upgrade head"
-	@echo ""
+	@echo "Railway runs 'alembic upgrade head' before each deploy (railway.json)."
 	@echo "See docs/DEPLOYMENT.md. AWS path: advanced/README.md"
 
 # ---------------------------------------------------------------------------

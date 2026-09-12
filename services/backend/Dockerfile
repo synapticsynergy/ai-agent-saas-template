@@ -3,8 +3,8 @@
 # Build context is the repository root.
 #
 #   dev      — hot-reloading local container (docker compose)
-#   runtime  — the deployed image (Render, Fly, Cloud Run, ECS, anything that
-#              runs a container and speaks HTTP)
+#   runtime  — the deployed image (Railway, or anything that runs a container
+#              and speaks HTTP)
 #
 # One image serves the API, the agent and the MCP server, because they are one
 # ASGI application (ADR-009). There is no Lambda target: the agent streams SSE,
@@ -59,6 +59,6 @@ USER app
 
 EXPOSE 8000
 
-# `$PORT` when the platform assigns one (Render, Fly, Cloud Run all do), 8000
-# otherwise. Exec form cannot expand variables, so this goes through a shell.
+# `$PORT` when the platform assigns one (Railway does), 8000 otherwise. Exec
+# form cannot expand variables, so this goes through a shell.
 CMD ["sh", "-c", "exec uvicorn asgi:app --host 0.0.0.0 --port ${PORT:-8000}"]

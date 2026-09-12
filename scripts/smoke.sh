@@ -23,7 +23,7 @@ WEB_URL="${SMOKE_WEB_URL:-${NEXT_PUBLIC_APP_URL:-}}"
 if [ -z "$API_URL" ]; then
   echo "ERROR: could not resolve the API URL for '$ENV_NAME'." >&2
   echo "       Set SMOKE_API_URL, e.g.:" >&2
-  echo "         SMOKE_API_URL=https://your-backend.fly.dev make smoke ENV=$ENV_NAME" >&2
+  echo "         SMOKE_API_URL=https://your-backend.up.railway.app make smoke ENV=$ENV_NAME" >&2
   echo "       (On the advanced/ AWS path, 'make terraform-apply ENV=$ENV_NAME' provides it.)" >&2
   exit 1
 fi
