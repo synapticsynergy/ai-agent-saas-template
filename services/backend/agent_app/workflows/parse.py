@@ -3,9 +3,10 @@
 Two implementations, one interface:
 
 * :func:`parse_with_rules` — deterministic keyword extraction. Used when
-  ``AGENT_MODEL_PROVIDER=scripted`` (local development and tests without AWS
+  ``AGENT_MODEL_PROVIDER=scripted`` (local development and tests without model
   credentials) and as the fallback when a model call fails.
-* The Bedrock path in ``agent_app.agent`` asks the model for the same structure.
+* :class:`agent_app.interpreter.ModelInterpreter` asks the model for the same
+  structure.
 
 Both produce a :class:`PlanningRequest`, so everything downstream is identical
 regardless of which one ran. The rule parser is not a "fake agent" — it is the

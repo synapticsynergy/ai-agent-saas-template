@@ -273,12 +273,13 @@ class TestInterpreterSelection:
         monkeypatch.setattr(settings, "agent_model_provider", "scripted")
         assert module.get_interpreter().name == "rules"
 
-    def test_bedrock_selects_the_bedrock_interpreter(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from agent_app import interpreter as module
-        from agent_app.config import settings
+    def test_an_unknown_provider_is_rejected_by_config(self) -> None:
+        from pydantic import ValidationError
 
-        monkeypatch.setattr(settings, "agent_model_provider", "bedrock")
-        assert module.get_interpreter().name == "bedrock"
+        from agent_app.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, agent_model_provider="bedrock")  # type: ignore[arg-type,call-arg]
 
     async def test_the_rule_interpreter_matches_direct_parsing(self) -> None:
         from agent_app.interpreter import RuleInterpreter
@@ -289,7 +290,7 @@ class TestInterpreterSelection:
         assert result.model_dump() == parse(REFERENCE_REQUEST).model_dump()
 
     async def test_a_model_failure_degrades_to_rules(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A Bedrock outage must cost understanding, not availability."""
+        """A model outage must cost understanding, not availability."""
         from agent_app.interpreter import ModelInterpreter
 
         client = FakeClient(error=RuntimeError("the provider is unavailable"))
@@ -331,9 +332,9 @@ class TestInterpreterSelection:
 class TestNarration:
     """The model explains the plan; it never decides it.
 
-    Regression guard: `AGENT_MODEL_PROVIDER=bedrock` used to change nothing
-    about the reply — the composed text was always used, while a docstring
-    claimed otherwise.
+    Regression guard: selecting a model provider used to change nothing about
+    the reply — the composed text was always used, while a docstring claimed
+    otherwise.
     """
 
     async def test_the_rule_interpreter_composes_the_reply(self) -> None:
@@ -352,7 +353,7 @@ class TestNarration:
         ]
         assert "".join(chunks).startswith("Here is a 3-stop evening")
 
-    async def test_the_model_writes_the_reply_when_bedrock_is_selected(
+    async def test_the_model_writes_the_reply_when_a_model_provider_is_selected(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from agent_app.interpreter import ModelInterpreter
@@ -451,19 +452,9 @@ class TestModelProviders:
         # Claude Opus 5 and Sonnet 5 return a 400 for sampling parameters.
         assert interpreter._sampling() == {}
 
-    def test_bedrock_sends_no_temperature_unless_configured(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A default temperature would 400 on newer models and silently fall back."""
-        from agent_app.config import settings
+    def test_no_sampling_parameters_are_ever_sent(self) -> None:
+        """Current Claude models 400 on temperature/top_p, and a failed call
+        falls back to rules silently — so nothing is sent."""
         from agent_app.interpreter import ModelInterpreter
 
-        monkeypatch.setattr(settings, "agent_model_provider", "bedrock")
-        monkeypatch.setattr(settings, "bedrock_temperature", None)
-
         assert ModelInterpreter()._sampling() == {}
-
-        # An explicitly configured value is still honoured, for older models
-        # on Bedrock that accept one.
-        monkeypatch.setattr(settings, "bedrock_temperature", 0.2)
-        assert ModelInterpreter()._sampling() == {"temperature": 0.2}

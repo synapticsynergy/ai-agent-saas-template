@@ -1,7 +1,7 @@
 """Composed narration.
 
 The reply the agent gives when no model is available — because
-``AGENT_MODEL_PROVIDER=scripted``, or because a Bedrock call failed. It reads
+``AGENT_MODEL_PROVIDER=scripted``, or because a model call failed. It reads
 the finished itinerary and states the facts, which is the part of a reply that
 must never be wrong.
 """

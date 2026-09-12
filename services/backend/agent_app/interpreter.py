@@ -6,12 +6,11 @@ code (see docs/adr/ADR-007-deterministic-planner.md).
 
 Two implementations behind one interface:
 
-* :class:`ModelInterpreter` — Claude via the Anthropic SDK, against the Claude
-  API or Amazon Bedrock. Interprets via structured output, narrates via a
-  streamed completion.
+* :class:`ModelInterpreter` — Claude via the Anthropic SDK. Interprets via
+  structured output, narrates via a streamed completion.
 * :class:`RuleInterpreter` — deterministic keyword extraction and composed
   prose. Used when ``AGENT_MODEL_PROVIDER=scripted``, and as the fallback
-  whenever a model call fails, so a Bedrock outage degrades how the agent reads
+  whenever a model call fails, so a model outage degrades how the agent reads
   and writes rather than taking the product down.
 
 Both satisfy the same protocol, so nothing downstream knows or cares which ran.
@@ -102,15 +101,11 @@ class RuleInterpreter:
 
 
 class ModelInterpreter:
-    """Claude via the Anthropic SDK — the Claude API directly, or Amazon Bedrock.
+    """Claude via the Anthropic SDK.
 
     Structured output rather than free text plus parsing: the model fills a
     schema the rest of the system already validates, so a malformed answer fails
     at the boundary instead of becoming a strange itinerary.
-
-    The provider is chosen by ``AGENT_MODEL_PROVIDER``. Everything above the
-    model — prompts, fallbacks, re-pinning — is identical for both, so switching
-    providers changes cost and setup, not behaviour.
     """
 
     def __init__(self) -> None:
@@ -120,52 +115,36 @@ class ModelInterpreter:
         self._client: Any = None
 
     def _build_client(self) -> Any:
-        """Construct the SDK client for the configured provider.
+        """Construct the SDK client.
 
         Imported lazily so `AGENT_MODEL_PROVIDER=scripted` needs neither the
         SDK nor credentials.
         """
-        if self.name == "anthropic":
-            from anthropic import AsyncAnthropic
+        from anthropic import AsyncAnthropic
 
-            # Pass the key only when configured. The repository .env is read
-            # into settings, not into the process environment, so the SDK would
-            # not otherwise see it; when it is empty the SDK resolves
-            # credentials itself.
-            if settings.anthropic_api_key:
-                return AsyncAnthropic(api_key=settings.anthropic_api_key)
-            return AsyncAnthropic()
-
-        from anthropic import AsyncAnthropicBedrockMantle
-
-        # The Mantle client is the Messages-API Bedrock endpoint, so the same
-        # request shape works against both providers. The older
-        # `AsyncAnthropicBedrock` client speaks the legacy InvokeModel path and
-        # takes differently-spelled model ids.
-        return AsyncAnthropicBedrockMantle(aws_region=settings.bedrock_region)
+        # Pass the key only when configured. The repository .env is read into
+        # settings, not into the process environment, so the SDK would not
+        # otherwise see it; when it is empty the SDK resolves credentials
+        # itself.
+        if settings.anthropic_api_key:
+            return AsyncAnthropic(api_key=settings.anthropic_api_key)
+        return AsyncAnthropic()
 
     @property
     def _model_id(self) -> str:
-        if self.name == "anthropic":
-            return settings.anthropic_model_id
-        return settings.bedrock_model_id
+        return settings.anthropic_model_id
 
     @property
     def _max_tokens(self) -> int:
-        if self.name == "anthropic":
-            return settings.anthropic_max_tokens
-        return settings.bedrock_max_tokens
+        return settings.anthropic_max_tokens
 
     def _sampling(self) -> dict[str, Any]:
-        """Sampling parameters, which current Claude models refuse.
+        """Sampling parameters — deliberately none.
 
         Claude Opus 5 and Sonnet 5 reject `temperature`/`top_p`/`top_k` with a
         400, and `interpret` swallows a failed call as a fallback to rules — so
-        sending one would quietly switch the model off rather than error. Only
-        an explicitly configured value is sent, for older models that accept it.
+        sending one would quietly switch the model off rather than error.
         """
-        if self.name != "anthropic" and settings.bedrock_temperature is not None:
-            return {"temperature": settings.bedrock_temperature}
         return {}
 
     async def interpret(
@@ -294,6 +273,6 @@ def _narration_prompt(itinerary: Itinerary, request: PlanningRequest, note: str)
 
 
 def get_interpreter() -> Interpreter:
-    if settings.agent_model_provider in ("anthropic", "bedrock"):
+    if settings.agent_model_provider == "anthropic":
         return ModelInterpreter()
     return RuleInterpreter()

@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ModelProvider = Literal["anthropic", "bedrock", "scripted"]
+ModelProvider = Literal["anthropic", "scripted"]
 
 
 class Settings(BaseSettings):
@@ -41,20 +41,8 @@ class Settings(BaseSettings):
     # tokens count against this cap. Only tokens actually generated are billed.
     anthropic_max_tokens: int = 16000
 
-    # Bedrock through the Mantle (Messages API) endpoint, which takes the
-    # first-party model id with an `anthropic.` prefix — not the dotted,
-    # dated InvokeModel spelling the legacy client used.
-    bedrock_model_id: str = "anthropic.claude-opus-5"
-    bedrock_region: str = "us-west-2"
-    bedrock_max_tokens: int = 16000
-    # Unset by default. Claude Opus 5 and Sonnet 5 reject sampling parameters
-    # with a 400, which the interpreter would swallow as a fallback to rules —
-    # so a default here would quietly switch the model off.
-    bedrock_temperature: float | None = None
-
     # Which model interprets requests and writes replies:
     #   anthropic — Claude API directly
-    #   bedrock   — Claude on Amazon Bedrock
     #   scripted  — no model call; rule-based parsing and composed replies, so
     #               the reference app, E2E suite and deterministic evals run
     #               without credentials. Refused outside APP_ENV=local, for the
