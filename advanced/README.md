@@ -23,7 +23,8 @@ advanced/
 
 The default path no longer ships the S3/DynamoDB adapters, the Bedrock model
 provider or LocalStack ([ADR-010](../docs/adr/ADR-010-railway-and-vercel.md)).
-They are still in git history: check out the commit before ADR-010 landed
+They are still in git history: check out the parent of the commit that
+deleted them
 (`git log --diff-filter=D -- services/backend/app/persistence/s3.py` finds it)
 if you graduate to this path and need them.
 

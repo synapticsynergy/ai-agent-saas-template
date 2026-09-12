@@ -31,12 +31,38 @@ def test_every_accepted_scheme_derives_both_drivers(given: str) -> None:
 
 def test_query_string_and_credentials_survive() -> None:
     url = "postgresql://u:p%40ss@db.example/app?sslmode=require"
-    assert to_async_url(url) == "postgresql+asyncpg://u:p%40ss@db.example/app?sslmode=require"
+    # asyncpg spells the libpq sslmode parameter `ssl`; psycopg takes it as-is.
+    assert to_async_url(url) == "postgresql+asyncpg://u:p%40ss@db.example/app?ssl=require"
+    assert to_sync_url(url) == "postgresql+psycopg://u:p%40ss@db.example/app?sslmode=require"
+
+
+def test_other_query_parameters_pass_through_unchanged() -> None:
+    url = "postgresql://u:p@db.example/app?sslmode=verify-full&application_name=api"
+    assert (
+        to_async_url(url)
+        == "postgresql+asyncpg://u:p@db.example/app?ssl=verify-full&application_name=api"
+    )
+
+
+def test_no_query_string_means_no_question_mark() -> None:
+    assert (
+        to_async_url("postgresql://u:p@db.example/app") == "postgresql+asyncpg://u:p@db.example/app"
+    )
 
 
 def test_non_postgres_urls_are_rejected() -> None:
     with pytest.raises(ValueError, match="Postgres"):
         to_async_url("mysql://u:p@db.example/app")
+
+
+def test_alembic_main_option_survives_a_percent_encoded_password() -> None:
+    """Alembic stores the URL in a ConfigParser, which interpolates '%'."""
+    from alembic.config import Config
+
+    url = "postgresql+psycopg://u:p%40ss@db.example/app"
+    config = Config()
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    assert config.get_main_option("sqlalchemy.url") == url
 
 
 def _settings(**overrides: object) -> Settings:

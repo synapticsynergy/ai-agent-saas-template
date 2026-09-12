@@ -254,7 +254,7 @@ terraform-apply: ## Apply Terraform changes: make terraform-apply ENV=dev
 infra-check: terraform-fmt terraform-validate ## Terraform formatting + validation
 
 .PHONY: infra-local-apply
-infra-local-apply: ## Apply the local Terraform env against LocalStack
+infra-local-apply: ## Apply the local Terraform env against LocalStack (bring your own LocalStack; the default path no longer runs one)
 	$(call require_tool,terraform,See https://developer.hashicorp.com/terraform/install)
 	terraform -chdir=$(TERRAFORM_DIR)/envs/local init -input=false
 	terraform -chdir=$(TERRAFORM_DIR)/envs/local apply -input=false -auto-approve

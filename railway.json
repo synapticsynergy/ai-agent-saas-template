@@ -5,7 +5,7 @@
     "dockerfilePath": "services/backend/Dockerfile"
   },
   "deploy": {
-    "preDeployCommand": ["alembic", "upgrade", "head"],
+    "preDeployCommand": ["alembic upgrade head"],
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",

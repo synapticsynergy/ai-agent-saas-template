@@ -255,9 +255,7 @@ Recommended terminals:
 ```text
 Terminal 1  docker compose up
 Terminal 2  pnpm dev
-Terminal 3  uv run fastapi dev
-Terminal 4  agentcore dev --logs
-Terminal 5  MCP server
+Terminal 3  make backend-dev
 ```
 
 For convenience:
@@ -266,7 +264,7 @@ For convenience:
 make dev
 ```
 
-starts all four in one terminal, prefixing each line with its service name.
+starts all three in one terminal, prefixing each line with its service name.
 **Ctrl-C stops everything** — the script puts each service in its own process
 group so the signal reaches the whole tree (make → uv → uvicorn/next), not just
 the wrapper.

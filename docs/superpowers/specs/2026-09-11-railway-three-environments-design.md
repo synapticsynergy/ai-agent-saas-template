@@ -58,7 +58,7 @@ from `main` once this work lands, and the git workflow doc stays as written
     "dockerfilePath": "services/backend/Dockerfile"
   },
   "deploy": {
-    "preDeployCommand": ["alembic", "upgrade", "head"],
+    "preDeployCommand": ["alembic upgrade head"],
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
@@ -143,7 +143,7 @@ Preview variables are scoped by branch in the Vercel dashboard:
 
 | Variable                          | `main` (Production)            | `staging` (Preview, branch `staging`) | `dev` (Preview, branch `dev`) |
 |-----------------------------------|--------------------------------|---------------------------------------|-------------------------------|
-| `APP_ENV`                         | `production`                   | `staging`                             | `dev`                         |
+| `APP_ENV`                         | `prod`                         | `staging`                             | `dev`                         |
 | `API_BASE_URL`                    | production backend URL         | staging backend URL                   | dev backend URL               |
 | `AGENT_BASE_URL`                  | `<API_BASE_URL>/agent`         | same pattern                          | same pattern                  |
 | `NEXT_PUBLIC_APP_URL`             | production Vercel URL          | staging branch alias                  | dev branch alias              |

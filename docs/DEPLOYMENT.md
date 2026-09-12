@@ -72,7 +72,7 @@ same names for Preview scoped to branch `staging`, and again scoped to `dev`:
 
 | Variable                | Production            | Preview `staging`       | Preview `dev`           |
 |-------------------------|-----------------------|-------------------------|-------------------------|
-| `APP_ENV`               | `production`          | `staging`               | `dev`                   |
+| `APP_ENV`               | `prod`                | `staging`               | `dev`                   |
 | `API_BASE_URL`          | production backend URL| staging backend URL     | dev backend URL         |
 | `AGENT_BASE_URL`        | `<API_BASE_URL>/agent`| same pattern            | same pattern            |
 | `NEXT_PUBLIC_APP_URL`   | production web URL    | staging branch alias    | dev branch alias        |
@@ -131,11 +131,15 @@ is already up.
 | Layer    | How |
 |----------|-----|
 | Web      | Vercel keeps every deployment — promote the previous one. |
-| Backend  | Railway **Deployments → ⋯ → Redeploy** on the previous deployment. |
+| Backend  | Railway **Deployments → ⋯ → Redeploy** on the previous deployment — only if that release added no migration; otherwise see Database. |
 | Database | `alembic downgrade -1`, only when the migration is genuinely reversible. Prefer rolling forward. |
 
-Because migrations run ahead of the code, rolling the backend back one release
-is safe: the schema is a superset of what the older code expects.
+Rolling the backend back one release is safe for the *code*: migrations ran
+ahead of it, so the schema is a superset of what the older code expects. It is
+not automatic for the *deploy*: the older image's pre-deploy `alembic upgrade
+head` will refuse a database whose `alembic_version` it does not know. If the
+release you are backing out added a migration, run `alembic downgrade -1`
+against that environment's database first, or roll forward instead.
 
 ## Promotion
 

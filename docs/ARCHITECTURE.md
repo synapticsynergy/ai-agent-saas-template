@@ -399,7 +399,7 @@ LOCAL
 Next.js          → local process/container
 FastAPI          → local process/container
 Postgres         → Docker
-Agent            → agentcore dev
+Agent            → in-process with the backend
 MCP              → local process/container
 
 CLOUD

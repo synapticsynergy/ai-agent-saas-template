@@ -319,7 +319,7 @@ Use the fastest local substitute for each layer:
 | Next.js | native `pnpm dev` or Docker |
 | FastAPI | native `uv run fastapi dev` or Docker |
 | Postgres | Docker |
-| Agent | `agentcore dev` |
+| Agent | in-process with the backend (`make backend-dev`) |
 | MCP server | native Python or Docker |
 | WorkOS | WorkOS development environment |
 | External location/event APIs | real sandbox/dev credentials or deterministic test fixtures |
@@ -543,8 +543,8 @@ See [docs/TESTING.md](docs/TESTING.md).
 ### Engineering
 
 - [x] Docker Compose local development
-- [x] Terraform for local, dev, staging and prod, with isolated state
-- [x] GitHub Actions CI/CD with OIDC, no static AWS credentials
+- [x] Terraform for the AWS path, under `advanced/`
+- [x] GitHub Actions CI on every PR; deploys by Railway and Vercel on branch push
 - [x] Unit, service, tool-contract, integration and end-to-end tests
 - [x] Agent evaluations gating promotion
 
