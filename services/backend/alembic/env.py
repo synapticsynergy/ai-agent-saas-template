@@ -1,8 +1,9 @@
 """Alembic environment.
 
-Migrations run against the *synchronous* driver (``DATABASE_SYNC_URL``) while
-the application uses asyncpg. Keeping migrations synchronous avoids an event
-loop inside deploy tooling for no benefit.
+Migrations run against the *synchronous* driver while the application uses
+asyncpg. Both URLs derive from one ``DATABASE_URL``; ``DATABASE_SYNC_URL`` is an
+optional override. Keeping migrations synchronous avoids an event loop inside
+deploy tooling for no benefit.
 """
 
 from __future__ import annotations

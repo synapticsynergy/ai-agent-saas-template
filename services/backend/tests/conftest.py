@@ -29,3 +29,8 @@ os.environ["AGENT_MODEL_PROVIDER"] = "scripted"
 # MCP: canned datasets instead of live provider APIs.
 os.environ["PLACES_PROVIDER"] = "fixture"
 os.environ["EVENTS_PROVIDER"] = "fixture"
+
+# Config: the developer's .env sets a real DATABASE_SYNC_URL override for local
+# Docker Compose. Tests that assert the override is *unset* by default must not
+# see it, so drop it rather than leaking whatever the environment happens to be.
+os.environ.pop("DATABASE_SYNC_URL", None)

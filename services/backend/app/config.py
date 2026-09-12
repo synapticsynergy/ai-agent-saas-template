@@ -10,8 +10,10 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import ValidationError, field_validator, model_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.db_url import to_async_url, to_sync_url
 
 AppEnv = Literal["local", "dev", "staging", "prod"]
 
@@ -27,8 +29,12 @@ class Settings(BaseSettings):
     app_env: AppEnv = "local"
     log_level: str = "INFO"
 
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/app"
-    database_sync_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/app"
+    # One URL, as every managed Postgres hands it out. The driver-specific
+    # forms the app and Alembic need are derived — see app.db_url.
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/app"
+    # Optional: point Alembic at a different endpoint (a direct connection
+    # when the app goes through a pooler). Read from DATABASE_SYNC_URL.
+    database_sync_url_override: str = Field(default="", validation_alias="DATABASE_SYNC_URL")
     database_pool_size: int = 5
     database_echo: bool = False
 
@@ -60,6 +66,14 @@ class Settings(BaseSettings):
     @property
     def jwks_url(self) -> str:
         return self.workos_jwks_url or (f"https://api.workos.com/sso/jwks/{self.workos_client_id}")
+
+    @property
+    def database_async_url(self) -> str:
+        return to_async_url(self.database_url)
+
+    @property
+    def database_sync_url(self) -> str:
+        return self.database_sync_url_override or to_sync_url(self.database_url)
 
     @field_validator("api_cors_origins")
     @classmethod

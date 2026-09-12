@@ -14,10 +14,10 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import settings
 
-# Lambda holds a single warm process per concurrent execution, so a small pool
-# is right: many small pools across many Lambda instances beat one large one.
+# A small pool per instance: horizontal replicas each carry their own, and
+# many small pools beat one large one against a managed Postgres.
 _engine = create_async_engine(
-    settings.database_url,
+    settings.database_async_url,
     echo=settings.database_echo,
     pool_pre_ping=True,
     pool_size=settings.database_pool_size,
