@@ -45,7 +45,10 @@ export function serverEnv(): ServerEnv {
   const env: ServerEnv = {
     appEnv: APP_ENV,
     apiBaseUrl: process.env.API_BASE_URL ?? "http://localhost:8000",
-    agentBaseUrl: process.env.AGENT_BASE_URL ?? "http://localhost:8080",
+    // The agent is mounted at /agent on the backend, not a separate service
+    // (ADR-009). It stays its own setting so pointing at a standalone agent
+    // remains configuration rather than a code change.
+    agentBaseUrl: process.env.AGENT_BASE_URL ?? "http://localhost:8000/agent",
     workosClientId: process.env.WORKOS_CLIENT_ID ?? "",
     workosApiKey: process.env.WORKOS_API_KEY ?? "",
     workosRedirectUri: process.env.WORKOS_REDIRECT_URI ?? "",

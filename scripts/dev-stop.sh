@@ -5,7 +5,7 @@
 # dev script) can leave a server holding a port. This reclaims them.
 set -uo pipefail
 
-PORTS=(3000 8000 8080 8090)
+PORTS=(3000 8000)
 found=0
 
 for port in "${PORTS[@]}"; do

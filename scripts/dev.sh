@@ -3,7 +3,7 @@
 #
 # Job control (`set -m`) is what makes that work: without it, background jobs
 # share this script's process group, so signalling "the group" hits this script
-# and nothing else — Ctrl-C then kills the wrapper and orphans four servers
+# and nothing else — Ctrl-C then kills the wrapper and orphans the servers
 # still holding their ports. With it, each `&` job leads its own group and
 # `kill -- -$pid` reaches the whole tree (make → uv → uvicorn/next).
 set -uo pipefail
@@ -82,17 +82,17 @@ start() {
   pids+=("$!")
 }
 
-start api   make api-dev
-start mcp   make mcp-dev
-start agent make agent-dev
-start web   make web-dev
+start backend make backend-dev
+start web     make web-dev
 
 cat <<'MSG'
 
-  web    http://localhost:3000
-  api    http://localhost:8000/health
-  agent  http://localhost:8080/health
-  mcp    http://localhost:8090/mcp
+  web      http://localhost:3000
+  api      http://localhost:8000/health
+  agent    http://localhost:8000/agent/ping
+  mcp      http://localhost:8000/mcp
+
+  The API, the agent and the MCP server share one process (ADR-009).
 
   Ctrl-C to stop everything.
 

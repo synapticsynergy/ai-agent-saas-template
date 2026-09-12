@@ -13,9 +13,10 @@ import { serverEnv } from "@/lib/env";
  * token, and the agent never has to trust a client-supplied identity.
  *
  * Note what this route is *not*: a proxy for the deterministic API. Agent
- * traffic goes browser → here → AgentCore Runtime → Strands → MCP. Ordinary
- * application traffic goes browser → Next.js server → FastAPI. Keeping the two
- * apart is ADR-001.
+ * traffic goes browser → here → the agent → MCP. Ordinary application traffic
+ * goes browser → Next.js server → the API. Those are still two separate paths
+ * with different shapes, even though the backend now serves both from one
+ * process (ADR-009) — this route never carries CRUD.
  */
 
 export const runtime = "nodejs";

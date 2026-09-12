@@ -1,6 +1,11 @@
 # ADR-006: AgentCore Resources Are Not Managed by Terraform
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-009](ADR-009-one-backend-deployable.md)
+
+> Moot rather than wrong: the agent no longer runs on AgentCore Runtime, so
+> there are no AgentCore resources for Terraform to own or not own. The
+> underlying point — don't force one IaC tool to own resources another tool
+> models better — still applies if AgentCore is reintroduced.
 
 ## Context
 

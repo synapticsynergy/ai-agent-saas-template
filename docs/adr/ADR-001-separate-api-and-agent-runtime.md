@@ -1,6 +1,11 @@
 # ADR-001: Separate the Application API and Agent Runtime
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-009](ADR-009-one-backend-deployable.md)
+
+> The reasoning below still describes the trade-off accurately. What changed is
+> the goal: this template is meant to be cloned and deployed quickly, and the
+> split made the first deploy expensive to buy scaling properties it does not
+> start out needing. The services stay independently splittable — see ADR-009.
 
 ## Context
 

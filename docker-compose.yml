@@ -3,10 +3,8 @@
 #   make infra-up     → postgres + localstack only (recommended; run apps natively)
 #   docker compose up → everything, including the app services
 #
-# The agent service runs here as a plain ASGI container so `docker compose up`
-# yields a complete working stack without the AgentCore CLI installed. For work
-# that needs AgentCore Runtime parity (session headers, runtime lifecycle), run
-# `make agent-dev` instead — see docs/DEVELOPMENT.md.
+# The API, the agent and the MCP server are one ASGI application and one
+# container (ADR-009), reachable at /, /agent and /mcp on port 8000.
 
 name: ai-agent-saas
 
@@ -48,10 +46,10 @@ services:
       retries: 20
       start_period: 20s
 
-  api:
+  backend:
     build:
       context: .
-      dockerfile: services/api/Dockerfile
+      dockerfile: services/backend/Dockerfile
       target: dev
     restart: unless-stopped
     env_file:
@@ -63,65 +61,26 @@ services:
       DATABASE_SYNC_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-app}
       AWS_ENDPOINT_URL: http://localstack:4566
       API_CORS_ORIGINS: http://localhost:3000
+      # In-process, but still addressed over HTTP so the agent keeps talking to
+      # its tools exactly as it would against a standalone MCP server.
+      MCP_SERVER_URL: http://backend:8000/mcp
+      API_BASE_URL: http://backend:8000
+      # The compose service name is the Host header other containers send.
+      MCP_ALLOWED_HOSTS: backend:8000,localhost:8000,127.0.0.1:8000
     ports:
       - "8000:8000"
     volumes:
-      # Mount the source at the same path the image uses, and keep each
+      # Mount the source at the same path the image uses, and keep the
       # container's own virtualenv: a bare bind mount would shadow it with the
       # host's, whose interpreter symlinks point at the developer's machine.
-      - ./services/api:/app/services/api
-      - api-venv:/app/services/api/.venv
+      - ./services/backend:/app/services/backend
+      - backend-venv:/app/services/backend/.venv
       - ./packages/contracts:/app/packages/contracts:ro
     depends_on:
       postgres:
         condition: service_healthy
       localstack:
         condition: service_healthy
-
-  mcp:
-    build:
-      context: .
-      dockerfile: services/mcp/Dockerfile
-      target: dev
-    restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      APP_ENV: ${APP_ENV:-local}
-      MCP_HOST: 0.0.0.0
-      MCP_PORT: "8090"
-      API_BASE_URL: http://api:8000
-    ports:
-      - "8090:8090"
-    volumes:
-      - ./services/mcp:/app/services/mcp
-      - mcp-venv:/app/services/mcp/.venv
-      - ./packages/contracts:/app/packages/contracts:ro
-    depends_on:
-      - api
-
-  agent:
-    build:
-      context: .
-      dockerfile: services/agent/Dockerfile
-      target: dev
-    restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      APP_ENV: ${APP_ENV:-local}
-      MCP_SERVER_URL: http://mcp:8090/mcp
-      API_BASE_URL: http://api:8000
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./services/agent:/app/services/agent
-      - agent-venv:/app/services/agent/.venv
-      - ./packages/contracts:/app/packages/contracts:ro
-    depends_on:
-      - mcp
 
   web:
     build:
@@ -134,8 +93,8 @@ services:
         required: false
     environment:
       APP_ENV: ${APP_ENV:-local}
-      API_BASE_URL: http://api:8000
-      AGENT_BASE_URL: http://agent:8080
+      API_BASE_URL: http://backend:8000
+      AGENT_BASE_URL: http://backend:8000/agent
     ports:
       - "3000:3000"
     volumes:
@@ -143,13 +102,10 @@ services:
       - web-node-modules:/app/apps/web/node_modules
       - web-next-cache:/app/apps/web/.next
     depends_on:
-      - api
-      - agent
+      - backend
 
 volumes:
   postgres-data:
-  api-venv:
-  mcp-venv:
-  agent-venv:
+  backend-venv:
   web-node-modules:
   web-next-cache:

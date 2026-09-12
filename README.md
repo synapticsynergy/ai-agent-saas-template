@@ -178,10 +178,14 @@ agent-run shapes. The API, the agent and the MCP server import it as a Python
 path dependency; `make contracts` generates the JSON Schema and TypeScript the
 web app compiles against. CI fails if the generated output is stale.
 
-It also holds the deterministic fixture dataset, because the MCP server and the
-agent's eval suite cannot share a virtualenv — the Strands SDK pins `mcp<2.2`
-while the MCP server needs `mcp>=2.2` — and two copies of the dataset would
-drift.
+It also holds the deterministic fixture dataset, so the MCP server's tools and
+the agent's eval suite read the same one and cannot drift apart.
+
+This used to be forced: the Strands SDK pinned `mcp<2.2` while the MCP server
+needed `mcp>=2.2`, so the two could not share a virtualenv at all. Dropping
+Strands for the Anthropic SDK removed that constraint (ADR-009). The dataset
+stays here because one definition is still the right shape, not because
+anything prevents sharing now.
 
 ## Authentication and Tenant Model
 
@@ -391,10 +395,16 @@ is ever left holding a port, `make dev-stop` reclaims them.
 ### Individual services
 
 ```bash
-make web-dev     # http://localhost:3000
-make api-dev     # http://localhost:8000
-make agent-dev   # http://localhost:8080
-make mcp-dev     # http://localhost:8090
+make web-dev       # http://localhost:3000
+make backend-dev   # http://localhost:8000
+```
+
+The backend serves all three surfaces from one process (ADR-009):
+
+```text
+http://localhost:8000/health        the application API
+http://localhost:8000/agent/ping    the agent
+http://localhost:8000/mcp           the MCP server
 ```
 
 ### Tests
@@ -499,14 +509,15 @@ See [docs/TESTING.md](docs/TESTING.md).
 
 ### Decisions
 
-- [ADR-001 — Separate the API and agent runtime](docs/adr/ADR-001-separate-api-and-agent-runtime.md)
+- [ADR-001 — Separate the API and agent runtime](docs/adr/ADR-001-separate-api-and-agent-runtime.md) *(superseded by ADR-009)*
 - [ADR-002 — WorkOS for B2B auth and RBAC](docs/adr/ADR-002-workos-for-b2b-auth.md)
 - [ADR-003 — MCP for reusable agent capabilities](docs/adr/ADR-003-mcp-for-agent-tools.md)
 - [ADR-004 — LocalStack, used selectively](docs/adr/ADR-004-localstack-scope.md)
 - [ADR-005 — The agent emits AG-UI directly](docs/adr/ADR-005-agui-emitted-by-the-agent.md)
-- [ADR-006 — AgentCore resources are not managed by Terraform](docs/adr/ADR-006-agentcore-owns-its-own-resources.md)
+- [ADR-006 — AgentCore resources are not managed by Terraform](docs/adr/ADR-006-agentcore-owns-its-own-resources.md) *(superseded by ADR-009)*
 - [ADR-007 — The planner is deterministic](docs/adr/ADR-007-deterministic-planner.md)
 - [ADR-008 — Conversation threads are not stored](docs/adr/ADR-008-conversation-threads-are-not-stored.md)
+- [ADR-009 — One backend deployable](docs/adr/ADR-009-one-backend-deployable.md)
 
 ### Service guides
 

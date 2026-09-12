@@ -8,9 +8,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 WEB      := apps/web
-API      := services/api
-AGENT    := services/agent
-MCP      := services/mcp
+BACKEND  := services/backend
 CONTRACTS := packages/contracts
 TERRAFORM_DIR := infra/terraform
 
@@ -61,9 +59,7 @@ install: ## Install all JavaScript and Python dependencies
 	$(call require_tool,uv,Install with: curl -LsSf https://astral.sh/uv/install.sh | sh)
 	$(PNPM) install
 	$(UV) sync --project $(CONTRACTS)
-	$(UV) sync --project $(API)
-	$(UV) sync --project $(AGENT)
-	$(UV) sync --project $(MCP)
+	$(UV) sync --project $(BACKEND)
 	@echo ""
 	@echo "Next: cp .env.example .env && make infra-up && make dev"
 
@@ -77,7 +73,7 @@ env: ## Create .env from .env.example if it does not exist
 # ---------------------------------------------------------------------------
 
 .PHONY: dev
-dev: ## Run web + api + agent + mcp together (Ctrl-C stops all)
+dev: ## Run web + backend together (Ctrl-C stops both)
 	@./scripts/dev.sh
 
 .PHONY: dev-stop
@@ -88,17 +84,9 @@ dev-stop: ## Free the development ports if a server was left running
 web-dev: ## Run the Next.js app on :3000
 	$(PNPM) --filter web dev
 
-.PHONY: api-dev
-api-dev: ## Run the FastAPI service on :8000
-	cd $(API) && $(UV) run fastapi dev app/main.py --host 0.0.0.0 --port 8000
-
-.PHONY: agent-dev
-agent-dev: ## Run the Strands agent locally on :8080
-	@./scripts/agent-dev.sh
-
-.PHONY: mcp-dev
-mcp-dev: ## Run the MCP server on :8090
-	cd $(MCP) && $(UV) run python server.py
+.PHONY: backend-dev
+backend-dev: ## Run the API + agent + MCP server on :8000
+	cd $(BACKEND) && $(UV) run uvicorn asgi:app --reload --host 0.0.0.0 --port 8000
 
 # ---------------------------------------------------------------------------
 # Local infrastructure
@@ -130,16 +118,16 @@ infra-logs: ## Tail local infrastructure logs
 
 .PHONY: db-migrate
 db-migrate: ## Apply Alembic migrations to the local database
-	cd $(API) && $(UV) run alembic upgrade head
+	cd $(BACKEND) && $(UV) run alembic upgrade head
 
 .PHONY: db-rollback
 db-rollback: ## Roll back the most recent migration
-	cd $(API) && $(UV) run alembic downgrade -1
+	cd $(BACKEND) && $(UV) run alembic downgrade -1
 
 .PHONY: db-migration
 db-migration: ## Create a migration: make db-migration NAME="add plans table"
 	@if [ -z "$(NAME)" ]; then echo 'ERROR: NAME is required. Example: make db-migration NAME="add plans table"'; exit 1; fi
-	cd $(API) && $(UV) run alembic revision --autogenerate -m "$(NAME)"
+	cd $(BACKEND) && $(UV) run alembic revision --autogenerate -m "$(NAME)"
 
 .PHONY: contracts
 contracts: ## Regenerate shared JSON Schema and TypeScript from the Pydantic contracts
@@ -156,7 +144,7 @@ contracts-check: ## Fail if the generated contracts are stale
 
 .PHONY: seed
 seed: ## Load deterministic demo data into the local database
-	cd $(API) && $(UV) run python -m app.seed
+	cd $(BACKEND) && $(UV) run python -m app.seed
 
 # ---------------------------------------------------------------------------
 # Quality
@@ -164,30 +152,22 @@ seed: ## Load deterministic demo data into the local database
 
 .PHONY: format
 format: ## Format all code
-	$(UV) run --project $(API) ruff format $(API) $(CONTRACTS)
-	$(UV) run --project $(MCP) ruff format $(MCP)
-	$(UV) run --project $(AGENT) ruff format $(AGENT) evals tests
+	$(UV) run --project $(BACKEND) ruff format $(BACKEND) $(CONTRACTS) evals tests
 	$(PNPM) --filter web format
 
 .PHONY: format-check
 format-check: ## Verify formatting without writing changes
-	$(UV) run --project $(API) ruff format --check $(API) $(CONTRACTS)
-	$(UV) run --project $(MCP) ruff format --check $(MCP)
-	$(UV) run --project $(AGENT) ruff format --check $(AGENT) evals tests
+	$(UV) run --project $(BACKEND) ruff format --check $(BACKEND) $(CONTRACTS) evals tests
 	$(PNPM) --filter web exec prettier --check "src/**/*.{ts,tsx}"
 
 .PHONY: lint
 lint: ## Lint Python and TypeScript
-	$(UV) run --project $(API) ruff check $(API) $(CONTRACTS)
-	$(UV) run --project $(MCP) ruff check $(MCP)
-	$(UV) run --project $(AGENT) ruff check $(AGENT) evals tests
+	$(UV) run --project $(BACKEND) ruff check $(BACKEND) $(CONTRACTS) evals tests
 	$(PNPM) --filter web lint
 
 .PHONY: typecheck
 typecheck: ## Type-check Python and TypeScript
-	$(UV) run --project $(API) mypy $(API)/app
-	$(UV) run --project $(MCP) mypy $(MCP)
-	$(UV) run --project $(AGENT) mypy $(AGENT)
+	$(UV) run --project $(BACKEND) mypy $(BACKEND)
 	$(PNPM) --filter web typecheck
 	$(PNPM) --filter e2e typecheck
 
@@ -198,15 +178,13 @@ typecheck: ## Type-check Python and TypeScript
 .PHONY: test-unit
 test-unit: ## Unit + service + tool-contract tests (no external infrastructure)
 	$(UV) run --project $(CONTRACTS) pytest $(CONTRACTS)/tests -q
-	$(UV) run --project $(API) pytest $(API)/tests -q
-	$(UV) run --project $(MCP) pytest $(MCP)/tests -q
-	$(UV) run --project $(AGENT) pytest $(AGENT)/tests -q
+	$(UV) run --project $(BACKEND) pytest $(BACKEND)/tests -q
 	$(PNPM) --filter web test
 
 .PHONY: test-integration
 test-integration: ## Integration tests against local Postgres + LocalStack + MCP
 	@./scripts/require-infra.sh
-	$(UV) run --project $(API) pytest tests/integration -q
+	$(UV) run --project $(BACKEND) pytest tests/integration -q
 
 .PHONY: test-e2e
 test-e2e: ## Playwright end-to-end tests against the local stack
@@ -219,7 +197,7 @@ e2e-install: ## Install the Playwright browsers
 
 .PHONY: eval
 eval: ## Run the agent evaluation suite
-	$(UV) run --project $(AGENT) python -m evals.run
+	$(UV) run --project $(BACKEND) python -m evals.run
 
 .PHONY: test
 test: test-unit test-integration test-e2e ## Full local test suite
@@ -287,7 +265,7 @@ build: ## Build all container images
 
 .PHONY: api-package
 api-package: ## Build the FastAPI Lambda container image
-	docker build -f $(API)/Dockerfile --target lambda -t ai-agent-saas-api:$(or $(TAG),local) .
+	docker build -f $(BACKEND)/Dockerfile -t ai-agent-saas-backend:$(or $(TAG),local) .
 
 # ---------------------------------------------------------------------------
 # Deployment
