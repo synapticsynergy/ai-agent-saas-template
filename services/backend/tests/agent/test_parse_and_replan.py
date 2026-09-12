@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from saas_contracts.plan import Itinerary
@@ -18,7 +19,7 @@ from agent_app.workflows.replan import (
     tighten_walk,
 )
 from agent_app.workflows.request import PlanningRequest
-from tests.conftest import LAT, LON, TONIGHT, StubTools
+from tests.agent.conftest import LAT, LON, TONIGHT, StubTools
 
 REFERENCE_REQUEST = (
     "Plan my evening near me. I want dinner, live music, and drinks. "
@@ -28,6 +29,61 @@ REFERENCE_REQUEST = (
 
 def parse(text: str) -> PlanningRequest:
     return parse_with_rules(text, latitude=LAT, longitude=LON, start_time=TONIGHT)
+
+
+class FakeClient:
+    """Stands in for `anthropic.AsyncAnthropic` at the two calls the agent makes.
+
+    Only `messages.parse` and `messages.stream` are modelled, because those are
+    the only SDK surfaces `ModelInterpreter` touches. `sent` captures the
+    request so a test can assert what the model was actually told.
+    """
+
+    def __init__(
+        self,
+        *,
+        parsed: PlanningRequest | None = None,
+        deltas: list[str] | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self._parsed = parsed
+        self._deltas = deltas or []
+        self._error = error
+        self.sent: dict[str, Any] = {}
+        self.messages = self
+
+    @property
+    def prompt(self) -> str:
+        """The user-turn text of the most recent call."""
+        messages = self.sent.get("messages") or []
+        return str(messages[0]["content"]) if messages else ""
+
+    async def parse(self, **kwargs: Any) -> object:
+        self.sent = kwargs
+        if self._error is not None:
+            raise self._error
+
+        class Response:
+            parsed_output = self._parsed
+
+        return Response()
+
+    def stream(self, **kwargs: Any) -> FakeClient:
+        self.sent = kwargs
+        return self
+
+    async def __aenter__(self) -> FakeClient:
+        if self._error is not None:
+            raise self._error
+        return self
+
+    async def __aexit__(self, *_: object) -> bool:
+        return False
+
+    @property
+    async def text_stream(self):  # type: ignore[no-untyped-def]
+        for delta in self._deltas:
+            yield delta
 
 
 class TestParsing:
@@ -236,12 +292,9 @@ class TestInterpreterSelection:
         """A Bedrock outage must cost understanding, not availability."""
         from agent_app.interpreter import ModelInterpreter
 
-        class ExplodingAgent:
-            async def structured_output_async(self, *_: object, **__: object) -> None:
-                raise RuntimeError("bedrock unavailable")
-
+        client = FakeClient(error=RuntimeError("the provider is unavailable"))
         interpreter = ModelInterpreter()
-        monkeypatch.setattr(interpreter, "_build", lambda: ExplodingAgent())
+        monkeypatch.setattr(interpreter, "_build_client", lambda: client)
 
         result = await interpreter.interpret(
             REFERENCE_REQUEST, latitude=LAT, longitude=LON, start_time=TONIGHT
@@ -254,17 +307,16 @@ class TestInterpreterSelection:
         from agent_app.interpreter import ModelInterpreter
         from agent_app.workflows.request import PlanningRequest
 
-        class WanderingAgent:
-            async def structured_output_async(self, *_: object, **__: object) -> PlanningRequest:
-                return PlanningRequest(
-                    latitude=1.0,
-                    longitude=2.0,
-                    start_time=datetime(1999, 1, 1, tzinfo=UTC),
-                    categories=["dinner"],
-                )
-
+        client = FakeClient(
+            parsed=PlanningRequest(
+                latitude=1.0,
+                longitude=2.0,
+                start_time=datetime(1999, 1, 1, tzinfo=UTC),
+                categories=["dinner"],
+            )
+        )
         interpreter = ModelInterpreter()
-        monkeypatch.setattr(interpreter, "_build", lambda: WanderingAgent())
+        monkeypatch.setattr(interpreter, "_build_client", lambda: client)
 
         result = await interpreter.interpret(
             "dinner", latitude=LAT, longitude=LON, start_time=TONIGHT
@@ -305,15 +357,9 @@ class TestNarration:
     ) -> None:
         from agent_app.interpreter import ModelInterpreter
 
-        class StreamingAgent:
-            async def stream_async(self, prompt: str):  # type: ignore[no-untyped-def]
-                self.prompt = prompt
-                for delta in ["A short ", "walk between ", "three good stops."]:
-                    yield {"data": delta}
-
-        narrator = StreamingAgent()
+        narrator = FakeClient(deltas=["A short ", "walk between ", "three good stops."])
         interpreter = ModelInterpreter()
-        monkeypatch.setattr(interpreter, "_build_narrator", lambda: narrator)
+        monkeypatch.setattr(interpreter, "_build_client", lambda: narrator)
 
         itinerary = await build_itinerary(
             PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
@@ -337,13 +383,12 @@ class TestNarration:
     ) -> None:
         from agent_app.interpreter import ModelInterpreter
 
-        class ExplodingAgent:
-            async def stream_async(self, _prompt: str):  # type: ignore[no-untyped-def]
-                raise RuntimeError("bedrock unavailable")
-                yield  # pragma: no cover - unreachable, marks this a generator
-
         interpreter = ModelInterpreter()
-        monkeypatch.setattr(interpreter, "_build_narrator", lambda: ExplodingAgent())
+        monkeypatch.setattr(
+            interpreter,
+            "_build_client",
+            lambda: FakeClient(error=RuntimeError("the provider is unavailable")),
+        )
 
         itinerary = await build_itinerary(
             PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
@@ -360,13 +405,8 @@ class TestNarration:
         """A silent model is as useless as a broken one."""
         from agent_app.interpreter import ModelInterpreter
 
-        class SilentAgent:
-            async def stream_async(self, _prompt: str):  # type: ignore[no-untyped-def]
-                return
-                yield  # pragma: no cover - unreachable, marks this a generator
-
         interpreter = ModelInterpreter()
-        monkeypatch.setattr(interpreter, "_build_narrator", lambda: SilentAgent())
+        monkeypatch.setattr(interpreter, "_build_client", lambda: FakeClient(deltas=[]))
 
         itinerary = await build_itinerary(
             PlanningRequest(latitude=LAT, longitude=LON, start_time=TONIGHT),
@@ -388,10 +428,10 @@ class TestModelProviders:
         monkeypatch.setattr(settings, "agent_model_provider", "anthropic")
         assert module.get_interpreter().name == "anthropic"
 
-    def test_the_anthropic_model_is_built_from_settings(
+    def test_the_anthropic_client_is_built_from_settings(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from strands.models.anthropic import AnthropicModel
+        from anthropic import AsyncAnthropic
 
         from agent_app.config import settings
         from agent_app.interpreter import ModelInterpreter
@@ -400,13 +440,16 @@ class TestModelProviders:
         monkeypatch.setattr(settings, "anthropic_api_key", "sk-ant-test")
         monkeypatch.setattr(settings, "anthropic_model_id", "claude-sonnet-5")
 
-        model = ModelInterpreter()._model()
+        interpreter = ModelInterpreter()
+        client = interpreter._build_client()
 
-        assert isinstance(model, AnthropicModel)
-        config = model.get_config()
-        assert config["model_id"] == "claude-sonnet-5"
+        assert isinstance(client, AsyncAnthropic)
+        # The key comes from settings, not the process environment: the
+        # repository .env is read into settings, so the SDK would not see it.
+        assert client.api_key == "sk-ant-test"
+        assert interpreter._model_id == "claude-sonnet-5"
         # Claude Opus 5 and Sonnet 5 return a 400 for sampling parameters.
-        assert "temperature" not in (config.get("params") or {})
+        assert interpreter._sampling() == {}
 
     def test_bedrock_sends_no_temperature_unless_configured(
         self, monkeypatch: pytest.MonkeyPatch
@@ -418,5 +461,9 @@ class TestModelProviders:
         monkeypatch.setattr(settings, "agent_model_provider", "bedrock")
         monkeypatch.setattr(settings, "bedrock_temperature", None)
 
-        config = ModelInterpreter()._model().get_config()
-        assert "temperature" not in config
+        assert ModelInterpreter()._sampling() == {}
+
+        # An explicitly configured value is still honoured, for older models
+        # on Bedrock that accept one.
+        monkeypatch.setattr(settings, "bedrock_temperature", 0.2)
+        assert ModelInterpreter()._sampling() == {"temperature": 0.2}

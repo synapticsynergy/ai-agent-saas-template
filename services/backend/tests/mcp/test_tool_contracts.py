@@ -23,7 +23,7 @@ from mcp_server import tools
 from mcp_server.providers import registry
 from mcp_server.providers.base import ProviderTimeout, ProviderUnavailable
 from mcp_server.tools.errors import map_exception
-from tests.conftest import CITY_CENTER, TONIGHT
+from tests.mcp.conftest import CITY_CENTER, TONIGHT
 
 LAT, LON = CITY_CENTER
 

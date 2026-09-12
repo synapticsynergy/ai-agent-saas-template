@@ -8,7 +8,7 @@ the same code against real Postgres and LocalStack; see docs/TESTING.md.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 
 # Pin the world these tests run in. `setdefault` is wrong here: the Makefile
@@ -21,6 +21,7 @@ os.environ["AUTH_DEV_FIXTURE"] = "0"
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -72,8 +73,8 @@ async def engine() -> AsyncIterator[object]:
 
 
 @pytest.fixture
-async def session(engine: object) -> AsyncIterator[AsyncSession]:
-    factory = async_sessionmaker(engine, expire_on_commit=False)  # type: ignore[arg-type]
+async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session
 
@@ -133,7 +134,9 @@ def sample_plan(title: str = "Test evening") -> PlanCreate:
 
 
 @pytest.fixture
-def client_factory(session: AsyncSession):
+def client_factory(
+    session: AsyncSession,
+) -> Iterator[Callable[[Principal | None], AsyncClient]]:
     """Build an HTTP client bound to a specific principal (or to none)."""
 
     def _build(principal: Principal | None) -> AsyncClient:

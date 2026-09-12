@@ -25,9 +25,12 @@ class Settings(BaseSettings):
     agent_name: str = "plan-my-evening"
     agent_port: int = 8080
 
+    # The API, the agent and the MCP server share one process (ADR-009), so
+    # these point at the same origin by default. They stay separate settings
+    # because splitting the service back apart should be configuration, not a
+    # code change.
     api_base_url: str = "http://localhost:8000"
-    mcp_server_url: str = "http://localhost:8090/mcp"
-    agentcore_gateway_url: str = ""
+    mcp_server_url: str = "http://localhost:8000/mcp"
 
     # Claude API, called directly. An empty key is not an error: the Anthropic
     # SDK also resolves ANTHROPIC_API_KEY from the process environment,
@@ -38,9 +41,12 @@ class Settings(BaseSettings):
     # tokens count against this cap. Only tokens actually generated are billed.
     anthropic_max_tokens: int = 16000
 
-    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    # Bedrock through the Mantle (Messages API) endpoint, which takes the
+    # first-party model id with an `anthropic.` prefix — not the dotted,
+    # dated InvokeModel spelling the legacy client used.
+    bedrock_model_id: str = "anthropic.claude-opus-5"
     bedrock_region: str = "us-west-2"
-    bedrock_max_tokens: int = 4096
+    bedrock_max_tokens: int = 16000
     # Unset by default. Claude Opus 5 and Sonnet 5 reject sampling parameters
     # with a 400, which the interpreter would swallow as a fallback to rules —
     # so a default here would quietly switch the model off.
@@ -53,7 +59,7 @@ class Settings(BaseSettings):
     #               the reference app, E2E suite and deterministic evals run
     #               without credentials. Refused outside APP_ENV=local, for the
     #               same reason AUTH_DEV_FIXTURE is.
-    agent_model_provider: ModelProvider = "bedrock"
+    agent_model_provider: ModelProvider = "anthropic"
 
     agent_timeout_seconds: float = 120.0
     tool_timeout_seconds: float = 20.0
@@ -69,8 +75,12 @@ class Settings(BaseSettings):
 
     @property
     def tools_url(self) -> str:
-        """Prefer AgentCore Gateway when configured, else the MCP server directly."""
-        return self.agentcore_gateway_url or self.mcp_server_url
+        """Where the agent reaches its tools.
+
+        Its own setting rather than a literal, so pointing the agent at an MCP
+        server in another process stays a configuration change.
+        """
+        return self.mcp_server_url
 
     @model_validator(mode="after")
     def _validate(self) -> Settings:

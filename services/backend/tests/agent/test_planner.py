@@ -13,7 +13,7 @@ import pytest
 
 from agent_app.workflows.planner import TRANSITION_BUFFER_MINUTES, build_itinerary
 from agent_app.workflows.request import PlanningRequest
-from tests.conftest import LAT, LON, TONIGHT, StubTools
+from tests.agent.conftest import LAT, LON, TONIGHT, StubTools
 
 
 class TestStructure:

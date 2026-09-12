@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     mcp_host: str = "127.0.0.1"
     mcp_port: int = 8090
 
+    # Host headers the MCP transport will accept. This is DNS-rebinding
+    # protection: the transport answers 421 for any Host not listed, so a
+    # deployed server MUST name its public hostname here or every MCP client
+    # is refused. Comma-separated, host[:port] — no scheme.
+    mcp_allowed_hosts: str = "localhost:8000,127.0.0.1:8000,testserver"
+
     api_base_url: str = "http://localhost:8000"
 
     places_provider: ProviderName = "fixture"
@@ -43,8 +49,19 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         return self.app_env == "local"
 
+    @property
+    def allowed_hosts(self) -> list[str]:
+        return [host.strip() for host in self.mcp_allowed_hosts.split(",") if host.strip()]
+
     @model_validator(mode="after")
     def _validate(self) -> Settings:
+        if not self.is_local and not self.allowed_hosts:
+            raise ValueError(
+                "MCP_ALLOWED_HOSTS must name this deployment's public hostname. "
+                "The MCP transport rejects unlisted Host headers with a 421, so "
+                "leaving it empty outside local silently refuses every client."
+            )
+
         for name, provider, url in (
             ("PLACES", self.places_provider, self.places_api_url),
             ("EVENTS", self.events_provider, self.events_api_url),

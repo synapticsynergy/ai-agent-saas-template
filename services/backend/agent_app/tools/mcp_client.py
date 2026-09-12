@@ -1,7 +1,7 @@
 """MCP client for the agent's tool layer.
 
 The agent reaches its tools over MCP, through AgentCore Gateway when one is
-configured and the MCP server directly otherwise (``settings.tools_url``).
+The MCP server named by ``settings.tools_url``.
 
 The caller's bearer assertion is forwarded on every call. The agent does not
 hold a credential of its own for tenant operations — it acts strictly on behalf

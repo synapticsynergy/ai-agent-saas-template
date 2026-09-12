@@ -1,15 +1,15 @@
-"""Agent entry point.
-
-Serves the AgentCore Runtime HTTP contract:
+"""The agent, as a mountable ASGI application.
 
   POST /invocations  — run the agent, streaming AG-UI events as SSE
   GET  /ping         — health probe
 
-``POST /`` is the same handler, so CopilotKit's HttpAgent can point at this
-service directly in local development without a path rewrite.
+``POST /`` is the same handler, so CopilotKit's HttpAgent can point at the
+mount root without a path rewrite.
 
-Run locally with ``make agent-dev`` (uses the AgentCore CLI when installed,
-uvicorn otherwise). Deploy with ``make agent-deploy ENV=<env>``.
+Mounted at ``/agent`` by ``asgi.py``, which is the process entry point; set the
+web app's ``AGENT_BASE_URL`` to that prefix. Nothing here assumes the mount
+point, so moving it — or splitting this back into its own service — is
+configuration rather than a code change.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ async def _events(payload: RunAgentInput, access_token: str | None) -> AsyncIter
 @app.post("/invocations")
 @app.post("/")
 async def invocations(request: Request) -> Any:
-    """AgentCore Runtime invocation endpoint."""
+    """Run the agent, streaming AG-UI events back as SSE."""
     body = await request.json()
 
     try:
@@ -110,7 +110,7 @@ async def invocations(request: Request) -> Any:
 @app.get("/ping")
 @app.get("/health")
 async def ping() -> dict[str, str]:
-    """AgentCore Runtime health probe."""
+    """Health probe."""
     return {
         "status": "Healthy",
         "agent": settings.agent_name,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.auth.permissions import Principal
-from tests.conftest import sample_plan
+from tests.api.conftest import sample_plan
 
 
 class TestHealth:

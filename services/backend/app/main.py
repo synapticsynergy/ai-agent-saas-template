@@ -1,11 +1,11 @@
-"""FastAPI application entry point.
+"""The deterministic application API.
 
-Deployment targets:
-  * local  — ``uv run fastapi dev app/main.py``
-  * Lambda — the ``handler`` below, behind API Gateway (see infra/terraform)
+This module owns CRUD, persistence, tenancy and authorization, and nothing
+else. It is mounted — along with the agent and the MCP server — by ``asgi.py``,
+which is the process entry point. Import it directly only in tests.
 
-This service owns deterministic behaviour only. It deliberately does not proxy
-the agent stream; see docs/adr/ADR-001.
+It still does not proxy the agent stream. Sharing a process is a deployment
+decision; the responsibilities stayed separate. See ADR-009.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from mangum import Mangum
 
 from app.config import settings
 from app.errors import AppError
@@ -163,6 +162,3 @@ app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(plans.router)
 app.include_router(agent_runs.router)
-
-# API Gateway (HTTP API) entry point.
-handler = Mangum(app, lifespan="off")

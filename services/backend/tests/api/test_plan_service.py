@@ -9,7 +9,7 @@ from app.auth.permissions import Principal
 from app.errors import NotFound, PermissionDenied
 from app.schemas.plan import PlanUpdate
 from app.services import plan_service
-from tests.conftest import sample_plan
+from tests.api.conftest import sample_plan
 
 
 class TestAuthorization:

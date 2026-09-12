@@ -21,7 +21,7 @@ from app.auth.permissions import (
     require_permission,
 )
 from app.errors import PermissionDenied
-from tests.conftest import make_principal
+from tests.api.conftest import make_principal
 
 
 class TestRoleDefaults:

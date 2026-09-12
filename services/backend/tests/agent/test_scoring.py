@@ -11,7 +11,7 @@ from agent_app.workflows.scoring import (
     total_cost,
     within_budget,
 )
-from tests.conftest import place
+from tests.agent.conftest import place
 
 
 class TestScorePlace:

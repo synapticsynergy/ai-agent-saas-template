@@ -15,7 +15,7 @@ from saas_contracts.plan import Itinerary, PlanStopCreate
 
 from agent_app.runner import RunContext, run
 from agent_app.tools.mcp_client import ToolCallError
-from tests.conftest import LAT, LON, TONIGHT, StubTools
+from tests.agent.conftest import LAT, LON, TONIGHT, StubTools
 
 
 class StubMcpClient(StubTools):

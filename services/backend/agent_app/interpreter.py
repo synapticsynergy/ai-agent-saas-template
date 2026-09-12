@@ -6,9 +6,9 @@ code (see docs/adr/ADR-007-deterministic-planner.md).
 
 Two implementations behind one interface:
 
-* :class:`ModelInterpreter` — a Strands agent on Claude, via the Claude API or
-  Amazon Bedrock. Interprets via structured output, narrates via a streamed
-  completion.
+* :class:`ModelInterpreter` — Claude via the Anthropic SDK, against the Claude
+  API or Amazon Bedrock. Interprets via structured output, narrates via a
+  streamed completion.
 * :class:`RuleInterpreter` — deterministic keyword extraction and composed
   prose. Used when ``AGENT_MODEL_PROVIDER=scripted``, and as the fallback
   whenever a model call fails, so a Bedrock outage degrades how the agent reads
@@ -102,7 +102,7 @@ class RuleInterpreter:
 
 
 class ModelInterpreter:
-    """A Strands agent on Claude — the Claude API directly, or Amazon Bedrock.
+    """Claude via the Anthropic SDK — the Claude API directly, or Amazon Bedrock.
 
     Structured output rather than free text plus parsing: the model fills a
     schema the rest of the system already validates, so a malformed answer fails
@@ -115,60 +115,64 @@ class ModelInterpreter:
 
     def __init__(self) -> None:
         self.name: str = settings.agent_model_provider
-        # Strands' Agent is untyped at this boundary, so these are Any rather
+        # The SDK's client is untyped at this boundary, so this is Any rather
         # than pretending to a precision the SDK does not provide.
-        self._agent: Any = None
-        self._narrator: Any = None
+        self._client: Any = None
 
-    def _build(self) -> Any:
-        # Imported lazily so `AGENT_MODEL_PROVIDER=scripted` needs neither a
-        # provider SDK nor credentials.
-        from strands import Agent
+    def _build_client(self) -> Any:
+        """Construct the SDK client for the configured provider.
 
-        return Agent(model=self._model(), system_prompt=SYSTEM_PROMPT)
-
-    def _build_narrator(self) -> Any:
-        from strands import Agent
-
-        return Agent(model=self._model(), system_prompt=NARRATION_PROMPT)
-
-    def _model(self) -> Any:
+        Imported lazily so `AGENT_MODEL_PROVIDER=scripted` needs neither the
+        SDK nor credentials.
+        """
         if self.name == "anthropic":
-            from strands.models.anthropic import AnthropicModel
+            from anthropic import AsyncAnthropic
 
             # Pass the key only when configured. The repository .env is read
             # into settings, not into the process environment, so the SDK would
             # not otherwise see it; when it is empty the SDK resolves
             # credentials itself.
-            client_args = (
-                {"api_key": settings.anthropic_api_key} if settings.anthropic_api_key else None
-            )
-            # No sampling parameters: Claude Opus 5 and Sonnet 5 reject them.
-            return AnthropicModel(
-                client_args=client_args,
-                model_id=settings.anthropic_model_id,
-                max_tokens=settings.anthropic_max_tokens,
-            )
+            if settings.anthropic_api_key:
+                return AsyncAnthropic(api_key=settings.anthropic_api_key)
+            return AsyncAnthropic()
 
-        from strands.models import BedrockModel
+        from anthropic import AsyncAnthropicBedrockMantle
 
-        # Note for newer models on Bedrock: structured output forces tool use,
-        # and Bedrock requires thinking to be disabled alongside a forced
-        # tool_choice. The Claude API does not.
-        options: dict[str, Any] = {
-            "model_id": settings.bedrock_model_id,
-            "region_name": settings.bedrock_region,
-            "max_tokens": settings.bedrock_max_tokens,
-        }
-        if settings.bedrock_temperature is not None:
-            options["temperature"] = settings.bedrock_temperature
-        return BedrockModel(**options)
+        # The Mantle client is the Messages-API Bedrock endpoint, so the same
+        # request shape works against both providers. The older
+        # `AsyncAnthropicBedrock` client speaks the legacy InvokeModel path and
+        # takes differently-spelled model ids.
+        return AsyncAnthropicBedrockMantle(aws_region=settings.bedrock_region)
+
+    @property
+    def _model_id(self) -> str:
+        if self.name == "anthropic":
+            return settings.anthropic_model_id
+        return settings.bedrock_model_id
+
+    @property
+    def _max_tokens(self) -> int:
+        if self.name == "anthropic":
+            return settings.anthropic_max_tokens
+        return settings.bedrock_max_tokens
+
+    def _sampling(self) -> dict[str, Any]:
+        """Sampling parameters, which current Claude models refuse.
+
+        Claude Opus 5 and Sonnet 5 reject `temperature`/`top_p`/`top_k` with a
+        400, and `interpret` swallows a failed call as a fallback to rules — so
+        sending one would quietly switch the model off rather than error. Only
+        an explicitly configured value is sent, for older models that accept it.
+        """
+        if self.name != "anthropic" and settings.bedrock_temperature is not None:
+            return {"temperature": settings.bedrock_temperature}
+        return {}
 
     async def interpret(
         self, text: str, *, latitude: float, longitude: float, start_time: datetime | None
     ) -> PlanningRequest:
-        if self._agent is None:
-            self._agent = self._build()
+        if self._client is None:
+            self._client = self._build_client()
 
         # The model does not choose these: location comes from the browser and
         # the clock comes from the server. Asking a model for either invites it
@@ -178,12 +182,28 @@ class ModelInterpreter:
         )
 
         try:
-            extracted = await self._agent.structured_output_async(
-                PlanningRequest,
-                f"{text}\n\n"
-                f"Use latitude {latitude}, longitude {longitude} and "
-                f"start_time {defaults.start_time.isoformat()}.",
+            # Structured output rather than free text plus parsing: the model
+            # fills the schema the rest of the system already validates.
+            response = await self._client.messages.parse(
+                model=self._model_id,
+                max_tokens=self._max_tokens,
+                system=SYSTEM_PROMPT,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"{text}\n\n"
+                            f"Use latitude {latitude}, longitude {longitude} and "
+                            f"start_time {defaults.start_time.isoformat()}."
+                        ),
+                    }
+                ],
+                output_format=PlanningRequest,
+                **self._sampling(),
             )
+            extracted = response.parsed_output
+            if extracted is None:
+                raise ValueError("model returned no parsable structured output")
         except Exception as exc:
             log.warning("interpreter.model_failed", provider=self.name, error=str(exc))
             return defaults
@@ -210,18 +230,24 @@ class ModelInterpreter:
         Deltas are forwarded as they arrive, so the reply appears while it is
         being written rather than landing in one block.
         """
-        if self._narrator is None:
-            self._narrator = self._build_narrator()
+        if self._client is None:
+            self._client = self._build_client()
 
         prompt = _narration_prompt(itinerary, request, note)
         produced = False
 
         try:
-            async for event in self._narrator.stream_async(prompt):
-                delta = event.get("data") if isinstance(event, dict) else None
-                if delta:
-                    produced = True
-                    yield str(delta)
+            async with self._client.messages.stream(
+                model=self._model_id,
+                max_tokens=self._max_tokens,
+                system=NARRATION_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+                **self._sampling(),
+            ) as stream:
+                async for delta in stream.text_stream:
+                    if delta:
+                        produced = True
+                        yield delta
         except Exception as exc:
             log.warning("interpreter.narration_failed", error=str(exc))
 
