@@ -35,13 +35,15 @@ None of these need a container, a network or a model.
 Python:
 
 ```bash
-uv run pytest tests/unit
+make test-unit                                          # everything below
+uv run --project services/backend pytest services/backend/tests -q
+uv run --project services/backend pytest services/backend/tests/agent -q
 ```
 
 Web:
 
 ```bash
-pnpm --dir apps/web test
+pnpm --filter web test
 ```
 
 ---

@@ -29,3 +29,16 @@ Negative:
 - network/protocol overhead,
 - additional failure modes,
 - more auth/identity propagation complexity.
+
+## Note after ADR-009
+
+"Independent deployment" is still one of the criteria above, but it is no longer
+a property this template exercises: the MCP server shares a process with the
+agent that calls it. The agent still reaches it over HTTP at `MCP_SERVER_URL`,
+so nothing about the boundary is faked — but the cost above is being paid for
+**interoperability** alone.
+
+That is a real payoff and worth being explicit about: the same `/mcp` endpoint
+serves Claude Desktop, VS Code, or any other MCP host, with no extra code. If a
+downstream product never wants that, calling the tool functions directly is the
+honest simplification, and the decision above says as much.

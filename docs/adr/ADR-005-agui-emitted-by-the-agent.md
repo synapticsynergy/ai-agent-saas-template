@@ -21,16 +21,20 @@ unnecessary custom event standard."
 ## Decision
 
 The agent emits AG-UI events directly, as Server-Sent Events, from its
-`POST /invocations` endpoint. CopilotKit consumes them without translation.
+`POST /invocations` endpoint — reachable at `/agent/invocations` since the agent
+became a mount on the backend (ADR-009). CopilotKit consumes them without
+translation.
 
 Application-level names that ride inside those events — progress stage names,
 the `approval_requested` custom event — are defined once in
 `packages/contracts/src/saas_contracts/streaming.py` and consumed by both the
 agent and the web app.
 
-The AgentCore Runtime contract and AG-UI compose without conflict: AgentCore
-requires `POST /invocations` and `GET /ping` and is agnostic about the response
-body, so an AG-UI SSE stream satisfies both.
+This originally had to compose with the AgentCore Runtime contract, which
+required `POST /invocations` and `GET /ping` and was agnostic about the response
+body. AgentCore is gone (ADR-009), but the endpoint names stayed: they cost
+nothing, and keeping them means the agent can be lifted back onto a runtime that
+expects that contract without touching the streaming code.
 
 ## Consequences
 
@@ -48,5 +52,5 @@ Negative:
 - SSE framing has to be exactly right. The AG-UI client splits frames on `\n\n`,
   so the agent must emit LF separators; `sse-starlette` defaults to CRLF, which
   produces a stream that never parses. This is configured explicitly in
-  `services/agent/agent.py` and is the kind of detail that only surfaces
+  `services/backend/agent_app/asgi.py` and is the kind of detail that only surfaces
   end-to-end, which is why the E2E suite exercises the real stream.

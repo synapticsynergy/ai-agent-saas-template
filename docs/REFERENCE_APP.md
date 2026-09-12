@@ -163,9 +163,10 @@ Only add capabilities when they serve a concrete product requirement.
 
 # MCP App
 
-The primary MCP App can be the interactive itinerary/map.
-
-Conceptually:
+`ui://itinerary/map` is a `text/html;profile=mcp-app` resource, registered in
+`mcp_server/resources/itinerary_map.py` and bound to the `render_itinerary`
+tool per the MCP Apps extension (SEP-1865). It is published and discoverable —
+`resources/list` on a live server returns it.
 
 ```text
 agent
@@ -179,9 +180,29 @@ MCP App resource
 interactive map + itinerary
 ```
 
-This provides a concrete example of a tool producing an interactive application surface rather than only text.
+## What renders it, and what does not
 
-Normal application UI should remain normal Next.js components where MCP Apps do not provide architectural value.
+**This application's own UI does not.** `apps/web` renders the itinerary with
+Leaflet in `ItineraryMap.tsx`, driven by AG-UI `STATE_SNAPSHOT` events. It never
+reads the `ui://` resource. That is deliberate: the itinerary is application
+state the page already owns, so it can be selected, panned and saved, which an
+iframe handed a snapshot cannot do as well.
+
+**An external MCP host does.** Point Claude Desktop or another MCP-Apps-capable
+client at `/mcp` and the same tool call renders the map inside that
+conversation, with no code written for it.
+
+That split is the honest summary of what MCP Apps buys here: it is a way to give
+*other people's clients* a UI, not a way to build your own. A host that does not
+implement the extension simply receives the structured itinerary as ordinary
+tool output and renders it however it likes — which is exactly what `apps/web`
+does.
+
+The document is deliberately dependency-free: MCP App resources are inlined into
+the host's sandboxed frame, where a CDN fetch may be blocked by CSP.
+
+Normal application UI should remain normal Next.js components where MCP Apps do
+not provide architectural value.
 
 ---
 
@@ -207,8 +228,10 @@ it: an approved save still goes agent → MCP → API, and the API checks
 all day and never write a plan — the agent explains the refusal rather than
 retrying.
 
-This is covered deterministically at three layers: `tests/test_save_plan.py`
-(MCP), `test_plan_service.py` (API), and the `viewer_cannot_save` eval case.
+This is covered deterministically at three layers:
+`services/backend/tests/mcp/test_save_plan.py` (MCP),
+`services/backend/tests/api/test_plan_service.py` (API), and the
+`viewer_cannot_save` eval case.
 
 ---
 

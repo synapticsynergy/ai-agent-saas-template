@@ -227,9 +227,19 @@ async def test_search_events():
 # FastAPI Development
 
 ```bash
+make backend-dev
+```
+
+That serves the composed application — the API, the agent and the MCP server
+(ADR-009). To run *only* the API, without the agent or MCP mounted:
+
+```bash
 cd services/backend
 uv run fastapi dev app/main.py
 ```
+
+Useful when debugging a route in isolation; note that `/agent` and `/mcp` are
+absent, so the web app's assistant will not work against it.
 
 Expected local endpoint:
 
@@ -326,8 +336,8 @@ docker compose up
 Rebuild a service:
 
 ```bash
-docker compose build api
-docker compose up -d api
+docker compose build backend
+docker compose up -d backend
 ```
 
 The recommended local loop is different from either: `make infra-up` runs only
@@ -409,13 +419,12 @@ make eval
 make db-migrate
 make seed
 
+make deploy-help
+
+# only for the advanced/ AWS path
 make terraform-fmt
 make terraform-validate
 make infra-check
-
-make deploy-dev
-make deploy-staging
-make deploy-prod
 ```
 
 The Makefile is the human-friendly interface; underlying tools remain directly usable.

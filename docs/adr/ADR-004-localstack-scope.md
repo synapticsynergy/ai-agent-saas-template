@@ -10,7 +10,10 @@ Local cloud emulation can shorten development and CI loops, but attempting to re
 
 Use LocalStack for conventional AWS services where local emulation materially improves development and integration testing, including S3, DynamoDB, Lambda, API Gateway, and messaging services when added.
 
-Use AgentCore's supported local development workflow for the agent runtime.
+The agent needs nothing from LocalStack: it runs as an ordinary local process
+alongside the API and the MCP server (ADR-009), and `AGENT_MODEL_PROVIDER=scripted`
+removes the model call entirely, so the whole stack runs with no cloud
+credentials of any kind.
 
 ## Consequences
 

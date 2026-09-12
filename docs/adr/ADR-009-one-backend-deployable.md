@@ -1,6 +1,6 @@
 # ADR-009: One Backend Deployable
 
-**Status:** Accepted — supersedes [ADR-001](ADR-001-separate-api-and-agent-runtime.md)
+**Status:** Accepted — supersedes [ADR-001](ADR-001-separate-api-and-agent-runtime.md) and [ADR-006](ADR-006-agentcore-owns-its-own-resources.md); amends [ADR-003](ADR-003-mcp-for-agent-tools.md)
 
 ## Context
 

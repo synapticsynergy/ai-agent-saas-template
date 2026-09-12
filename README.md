@@ -427,46 +427,34 @@ make eval               # agent evaluations
 make test               # everything
 ```
 
-### Infrastructure
-
-```bash
-make infra-check              # terraform fmt + validate
-make terraform-plan ENV=dev
-make deploy-dev
-```
-
 ---
 
 ## Deployment
 
-### Development
+Two deploys. Full guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ```bash
-git checkout dev
-git pull
-make test
-make deploy-dev
+# migrations first — the schema leads the code that reads it
+cd services/backend && uv run alembic upgrade head
+
+# backend: one container
+fly deploy                                    # or push to Render
+
+# web
+pnpm --filter web exec vercel deploy --prod
 ```
 
-### Staging
+`make deploy-help` prints the same summary.
 
-```bash
-git checkout staging
-git merge dev
-git push origin staging
-make deploy-staging
-```
+There is deliberately no `make deploy` wrapper. Each of these talks to a
+different account, and a Make target that hides which one is a bad trade for
+three saved keystrokes.
 
-### Production
+For team use, prefer deploying from CI after branch protection and required
+checks rather than from a developer's machine.
 
-```bash
-git checkout main
-git merge staging
-git push origin main
-make deploy-prod
-```
-
-For normal team use, deployments should be triggered by CI after branch protection and required checks rather than by developers manually running production deploy commands.
+The AWS path — Terraform, four environments, per-service deploys — lives in
+[`advanced/`](advanced/README.md).
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

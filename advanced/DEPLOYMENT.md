@@ -1,4 +1,21 @@
-# Deployment and Environments
+# Deployment and Environments — the AWS path
+
+> **This is not the default path, and the commands below no longer run as
+> written.** It documents the four-environment AWS deployment the template
+> used before [ADR-009](../docs/adr/ADR-009-one-backend-deployable.md): Lambda
+> for the API and the MCP server, AgentCore Runtime for the agent, Terraform
+> for everything else.
+>
+> The `make api-deploy` / `agent-deploy` / `mcp-deploy` / `web-deploy` and
+> `make deploy-*` targets were removed with that change, and the scripts they
+> called — now in `advanced/scripts/deploy/` — still address `services/api`,
+> `services/agent` and `services/mcp`, which no longer exist. The Terraform
+> under `advanced/infra/` is intact and still valid.
+>
+> Read this for the wiring and the sequencing rationale. Expect to rewrite the
+> parts that name services before running any of it. The current, working path
+> is [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md).
+
 
 ## Environments
 
