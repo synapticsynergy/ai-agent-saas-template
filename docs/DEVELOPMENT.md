@@ -8,7 +8,6 @@ Recommended:
 Node package manager     pnpm
 Python package manager   uv
 Containers               Docker Compose
-AWS local emulator       LocalStack
 Task runner              Make
 Infrastructure           Terraform (only for the advanced/ AWS path)
 ```
@@ -31,8 +30,8 @@ container's `env_file` still takes precedence.
 Never commit actual secrets. `.env` is git-ignored; only `.env.example` is
 tracked.
 
-Variables are grouped by concern in `.env.example`: APP, WORKOS, AWS, DATABASE,
-AGENTCORE, BEDROCK, MCP, MAPS, and the event/place providers.
+Variables are grouped by concern in `.env.example`: APP, WORKOS, DATABASE,
+AGENT, ANTHROPIC, MODEL PROVIDER, MCP, MAPS, and the event/place providers.
 
 Important ones:
 
@@ -40,10 +39,9 @@ Important ones:
 |---|---|
 | `APP_ENV` | `local`, `dev`, `staging` or `prod`. Several safety guards key off it. |
 | `AUTH_DEV_FIXTURE` | `1` uses a deterministic local identity instead of WorkOS. Refused unless `APP_ENV=local`. |
-| `AGENT_MODEL_PROVIDER` | `bedrock` or `scripted`. `scripted` skips model inference; refused unless `APP_ENV=local`. |
+| `AGENT_MODEL_PROVIDER` | `anthropic` or `scripted`. `scripted` skips model inference; refused unless `APP_ENV=local`. |
 | `PLACES_PROVIDER` / `EVENTS_PROVIDER` | `fixture` (deterministic dataset) or `http` (a real provider). |
-| `AWS_ENDPOINT_URL` | Points the AWS SDK at LocalStack. Must be **empty** in deployed environments — the API refuses to start otherwise. |
-| `DATABASE_URL` / `DATABASE_SYNC_URL` | asyncpg for the application, psycopg for Alembic. |
+| `DATABASE_URL` | Plain `postgresql://`; the app derives asyncpg and psycopg forms. `DATABASE_SYNC_URL` optionally overrides the sync one. |
 
 ### Startup validation
 
@@ -95,14 +93,13 @@ Use Docker Compose for dependencies that are convenient to run locally:
 
 ```text
 postgres
-localstack
 optional redis
 ```
 
 Example:
 
 ```bash
-docker compose up -d postgres localstack
+docker compose up -d postgres
 ```
 
 or:
@@ -131,28 +128,10 @@ docker compose logs -f
 
 ---
 
-# LocalStack
+# AWS emulation
 
-Use LocalStack for conventional AWS resources where emulation improves the dev/test loop:
-
-- S3
-- DynamoDB
-- Lambda
-- API Gateway
-- SQS/SNS if added later
-- Terraform validation against a local AWS-compatible endpoint
-
-Do not make the project dependent on LocalStack for model or agent behavior.
-
-Recommended Terraform flow:
-
-```bash
-lstk terraform -chdir=advanced/infra/terraform/envs/local init
-lstk terraform -chdir=advanced/infra/terraform/envs/local plan
-lstk terraform -chdir=advanced/infra/terraform/envs/local apply
-```
-
-If local Terraform does not add value for a particular project, Docker Compose + application-level configuration is acceptable.
+The default path uses no AWS services. The `advanced/` Terraform path still
+validates against LocalStack; see [advanced/README.md](../advanced/README.md).
 
 ---
 
@@ -183,7 +162,6 @@ what makes the end-to-end suite and the evals free and deterministic.
 | Provider | Needs | Notes |
 |---|---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` (or `ant auth login`) | Least setup. Default model `claude-opus-5`; set `ANTHROPIC_MODEL_ID` to `claude-sonnet-5` or `claude-haiku-4-5` to spend less. |
-| `bedrock` | AWS credentials, plus model access granted in the Bedrock console | Keeps inference inside your AWS account. Pricing is set by AWS. |
 | `scripted` | nothing | No model call. Local and test only. |
 
 The model does two short jobs per run — turning a sentence into constraints,
@@ -341,7 +319,7 @@ docker compose up -d backend
 ```
 
 The recommended local loop is different from either: `make infra-up` runs only
-Postgres and LocalStack in containers, and `make dev` runs the application
+Postgres in a container, and `make dev` runs the application
 services natively. Native processes restart faster and attach to a debugger more
 easily; the Dockerfiles exist for CI parity, container deployment and for
 reproducing a dependency problem that only appears in an image.
@@ -366,8 +344,8 @@ make db-migrate                            # apply to head
 make db-rollback                           # step back one revision
 ```
 
-Migrations use the synchronous driver (`DATABASE_SYNC_URL`) while the
-application uses asyncpg, so deploy tooling never needs an event loop.
+Migrations use the synchronous driver while the application uses asyncpg;
+both derive from `DATABASE_URL`, so deploy tooling never needs an event loop.
 
 Do not apply production schema changes from developer laptops.
 

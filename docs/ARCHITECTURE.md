@@ -116,9 +116,7 @@ Owns execution of nondeterministic agent workloads:
 - agent lifecycle,
 - memory/tracing integrations.
 
-It calls Claude through the Anthropic SDK — the Claude API directly, or Bedrock
-through the Mantle endpoint. Both are the same code path; the provider changes
-cost and setup, not behaviour.
+It calls Claude through the Anthropic SDK. Swapping the model is a configuration change (`ANTHROPIC_MODEL_ID`), not a code change.
 
 Prefer small tools with narrow contracts rather than a giant `do_everything()` function.
 
@@ -291,7 +289,7 @@ path.
 Preferred path:
 
 ```text
-Claude (Claude API or Bedrock)
+Claude (Claude API)
    ↓
 agent_app  (/agent, SSE)
    ↓
@@ -388,8 +386,6 @@ Stateless layers:
 Durable state:
 
 - Postgres,
-- S3,
-- optional DynamoDB,
 - durable agent memory where appropriate.
 
 Scale each independently.
@@ -403,15 +399,13 @@ LOCAL
 Next.js          → local process/container
 FastAPI          → local process/container
 Postgres         → Docker
-AWS primitives   → LocalStack where useful
 Agent            → agentcore dev
 MCP              → local process/container
 
 CLOUD
 Next.js              → Vercel
-Backend (all three)  → one container: Fly, Render, Cloud Run, ECS
-Postgres             → Neon, RDS/Aurora, or any managed Postgres
-S3                   → AWS S3
+Backend (all three)  → one container per environment on Railway
+Postgres             → Railway Postgres (one per environment)
 
 The AWS path — Lambda, AgentCore, RDS in a VPC — is preserved under
 advanced/ for when the split earns its cost.

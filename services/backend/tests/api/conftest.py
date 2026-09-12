@@ -2,7 +2,7 @@
 
 Unit and service tests run against an in-memory SQLite database so they need no
 containers and stay fast. The integration suite (``tests/integration``) exercises
-the same code against real Postgres and LocalStack; see docs/TESTING.md.
+the same code against real Postgres; see docs/TESTING.md.
 """
 
 from __future__ import annotations

@@ -168,7 +168,6 @@ make test-integration
 | File | Exercises |
 |---|---|
 | `test_postgres.py` | tenant isolation, cascades, idempotency against real Postgres |
-| `test_s3.py` | tenant key prefixing and not-found mapping against LocalStack |
 | `test_api_http.py` | the ASGI app end to end, including a forged `organization_id` in the body |
 | `test_mcp_server.py` | a live MCP server over streamable HTTP: handshake, tool schemas, the `ui://` resource, and an unauthenticated `save_plan` |
 
@@ -258,12 +257,6 @@ Run:
 ```bash
 terraform fmt -check -recursive advanced/infra/terraform
 terraform validate
-```
-
-Optionally apply relevant modules to LocalStack:
-
-```bash
-make infra-local-apply
 ```
 
 In CI:

@@ -20,7 +20,8 @@ Rules:
 - PR only,
 - required CI checks,
 - no force pushes,
-- no direct feature development.
+- no direct feature development,
+- deploys to Railway `production` and Vercel Production on push.
 
 ### `staging`
 
@@ -29,7 +30,7 @@ Release candidate and demo environment.
 Rules:
 
 - normally receives merges from `dev`,
-- deploys automatically to staging,
+- deploys to Railway `staging` and a Vercel preview on push,
 - must pass integration/E2E/evals before promotion.
 
 ### `dev`
@@ -39,7 +40,7 @@ Shared development integration branch.
 Rules:
 
 - feature branches merge here,
-- automatically deployable to shared dev,
+- deploys to Railway `dev` and a Vercel preview on push,
 - expected to remain usable.
 
 ### `feature/<name>`

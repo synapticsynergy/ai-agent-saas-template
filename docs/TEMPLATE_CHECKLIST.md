@@ -80,7 +80,7 @@ tests/e2e/specs/planner.spec.ts
 ```text
 services/backend/asgi.py                          the composition
 services/backend/app/auth/                        WorkOS, permissions, principals
-services/backend/app/persistence/                 engine, session, S3, Dynamo
+services/backend/app/persistence/                 engine, session
 services/backend/app/main.py                      error mapping, correlation ids
 services/backend/agent_app/asgi.py                the AG-UI contract
 services/backend/agent_app/streaming.py           the event vocabulary
@@ -138,11 +138,11 @@ For every proposed MCP capability ask:
 
 ## Persistence
 
-- [ ] choose Postgres/DynamoDB based on access patterns
+- [ ] confirm Postgres fits the access patterns
 - [ ] create migrations
 - [ ] add `organization_id`
 - [ ] define backup/restore
-- [ ] configure S3 if blobs/files are required
+- [ ] add object storage if blobs/files are required (not included by default)
 
 ## Local Development
 
@@ -150,7 +150,6 @@ For every proposed MCP capability ask:
 - [ ] Dockerfiles
 - [ ] `docker-compose.yml`
 - [ ] Postgres container
-- [ ] LocalStack if useful
 - [ ] the backend's local dev command
 - [ ] seed fixtures
 - [ ] one-command startup

@@ -16,10 +16,16 @@ advanced/
 | Concern | Default | Here |
 |---|---|---|
 | Web | Vercel | Terraform output + `WEB_DEPLOY_COMMAND` |
-| Backend | One container on Fly or Render | Lambda (API) + AgentCore (agent) + Lambda (MCP) |
-| Database | Neon | RDS in a VPC |
-| Environments | `local`, `production` | `local`, `dev`, `staging`, `prod` |
+| Backend | One container per environment on Railway | Lambda (API) + AgentCore (agent) + Lambda (MCP) |
+| Database | Railway Postgres | RDS in a VPC |
+| Environments | `dev`, `staging`, `production` | `local`, `dev`, `staging`, `prod` |
 | IaC | none | Terraform, per-environment state |
+
+The default path no longer ships the S3/DynamoDB adapters, the Bedrock model
+provider or LocalStack ([ADR-010](../docs/adr/ADR-010-railway-and-vercel.md)).
+They are still in git history: check out the commit before ADR-010 landed
+(`git log --diff-filter=D -- services/backend/app/persistence/s3.py` finds it)
+if you graduate to this path and need them.
 
 ## When to come back to it
 

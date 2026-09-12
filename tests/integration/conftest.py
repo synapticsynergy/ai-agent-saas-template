@@ -1,6 +1,6 @@
 """Integration test fixtures.
 
-These tests run against *real* local infrastructure — Postgres and LocalStack —
+These tests run against *real* local infrastructure — Postgres —
 started by `make infra-up`. They deliberately do not skip when it is missing:
 a green run must mean the boundaries were actually exercised, not that the
 suite quietly decided not to look.

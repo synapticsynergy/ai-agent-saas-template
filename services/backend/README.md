@@ -126,11 +126,11 @@ explain stays ordinary code.
 | Provider | Needs | Notes |
 |---|---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` (or `ant auth login`) | The default. Least setup. Model `claude-opus-5`; set `ANTHROPIC_MODEL_ID` to `claude-sonnet-5` or `claude-haiku-4-5` to spend less. |
-| `bedrock` | AWS credentials, plus model access granted in the Bedrock console | Keeps inference inside your AWS account. Uses the Mantle (Messages API) endpoint, so `BEDROCK_MODEL_ID` takes the `anthropic.`-prefixed form. |
 | `scripted` | nothing | No model call, no spend. Local and test only; refused outside `APP_ENV=local`. |
 
-Both providers go through the Anthropic SDK, so everything above the model —
-prompts, structured output, fallbacks, re-pinning — is identical.
+`anthropic` goes through the Anthropic SDK, so everything above the model —
+prompts, structured output, fallbacks, re-pinning — is identical regardless of
+which model you choose.
 
 ### HTTP contract
 

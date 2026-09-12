@@ -8,12 +8,12 @@ The template is intentionally opinionated around:
 - **CopilotKit / AG-UI** for agent ↔ UI interaction and streaming
 - **WorkOS AuthKit** for authentication, organizations, and RBAC
 - **FastAPI + Python** for deterministic application APIs, the agent, and MCP
-- **Anthropic SDK** for model calls, against the Claude API or Amazon Bedrock
+- **Anthropic SDK** for model calls against the Claude API
 - **MCP** for tools, including an MCP Apps `ui://` resource
 - **Leaflet + OpenStreetMap** for the itinerary map
-- **Postgres, S3, and optional DynamoDB** for application persistence
-- **Docker Compose + LocalStack** for fast local development
-- **Vercel + a container host** for deployment; Terraform/AWS under `advanced/`
+- **Postgres** for application persistence
+- **Docker Compose** for fast local development
+- **Vercel + Railway** for deployment across dev, staging and production; Terraform/AWS under `advanced/`
 - **GitHub Actions** for CI
 
 The project is designed to make new AI-agent SaaS applications quick to bootstrap while keeping architectural decisions explicit, testable, and understandable to contributors.
@@ -82,8 +82,8 @@ The point is not to build a nightlife platform. The point is to exercise the reu
                         ▼                                 ▼
              ┌──────────────────────┐          ┌──────────────────────┐
              │ Application Data     │          │ External APIs        │
-             │ Postgres / S3        │          │ places, events       │
-             │ DynamoDB (optional)  │          │ (fixtures by default)│
+             │ Postgres             │          │ places, events       │
+             │                      │          │ (fixtures by default)│
              └──────────────────────┘          └──────────────────────┘
 
                     Any MCP client — Claude Desktop, VS Code —
@@ -136,13 +136,13 @@ ai-agent-saas-template/
 │   └── contracts/               # Shared domain contracts + generated types
 ├── evals/                       # agent evaluation dataset and runner
 ├── tests/
-│   ├── integration/             # against real Postgres, LocalStack, MCP
+│   ├── integration/             # against real Postgres and MCP
 │   └── e2e/                     # Playwright
 ├── advanced/                    # the AWS path: Terraform, per-service deploys
 ├── scripts/                     # dev and validation scripts
 ├── docs/
 ├── docker-compose.yml
-├── fly.toml / render.yaml       # backend hosting
+├── railway.json                 # backend hosting
 ├── vercel.json                  # web hosting
 ├── Makefile
 └── README.md
@@ -158,7 +158,7 @@ services/backend/
 │   ├── auth/                  workos.py (JWT verification), permissions.py
 │   ├── routes/                thin HTTP layer; maps to services
 │   ├── services/              authorization + tenant scoping live here
-│   ├── persistence/           postgres.py, s3.py, dynamo.py
+│   ├── persistence/           postgres.py
 │   ├── models/                SQLAlchemy
 │   ├── schemas/               re-exported from packages/contracts
 │   └── main.py
@@ -257,7 +257,7 @@ Service Layer         (authorization + tenant scoping)
   ↓
 Persistence
   ↓
-Postgres / S3 / DynamoDB
+Postgres
 ```
 
 ### Agent interaction
@@ -319,13 +319,10 @@ Use the fastest local substitute for each layer:
 | Next.js | native `pnpm dev` or Docker |
 | FastAPI | native `uv run fastapi dev` or Docker |
 | Postgres | Docker |
-| S3 / DynamoDB | LocalStack where useful |
 | Agent | `agentcore dev` |
 | MCP server | native Python or Docker |
 | WorkOS | WorkOS development environment |
 | External location/event APIs | real sandbox/dev credentials or deterministic test fixtures |
-
-Do **not** force LocalStack to emulate services it is not intended to reproduce. The purpose is fast feedback, not perfect local imitation of every managed AWS feature.
 
 ---
 
@@ -359,11 +356,10 @@ See [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md).
 
 | Tool | Why | Required |
 |---|---|---|
-| Docker | Postgres and LocalStack | yes |
+| Docker | Postgres | yes |
 | Node 20.9+ and pnpm | the web app | yes |
 | Python 3.12+ and [uv](https://docs.astral.sh/uv/) | the API, agent and MCP server | yes |
 | Make | the developer interface | yes |
-| Docker | local Postgres + LocalStack | yes |
 | Terraform / AWS CLI | only the `advanced/` AWS path | no |
 
 `pnpm` comes with Node: `corepack enable pnpm`.
@@ -388,14 +384,14 @@ Out of the box this runs **without any cloud credentials**:
 
 - `AUTH_DEV_FIXTURE=1` supplies a deterministic local identity in place of
   WorkOS. It is refused outside `APP_ENV=local` by both the web app and the API.
-- `AGENT_MODEL_PROVIDER=scripted` skips Bedrock inference and parses requests
+- `AGENT_MODEL_PROVIDER=scripted` skips model inference and parses requests
   with rules. Only request interpretation is affected — the planner, the tools
   and the whole authorization path are the real ones
   ([ADR-007](docs/adr/ADR-007-deterministic-planner.md)).
 - `PLACES_PROVIDER=fixture` serves a deterministic local dataset instead of a
   third-party API.
 
-To use the real services, set `WORKOS_*`, `AGENT_MODEL_PROVIDER=bedrock` and the
+To use the real services, set `WORKOS_*`, `AGENT_MODEL_PROVIDER=anthropic`, `ANTHROPIC_API_KEY` and the
 provider credentials in `.env`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 `make dev` runs all four in one terminal; **Ctrl-C stops them all**. If a server
@@ -421,7 +417,7 @@ http://localhost:8000/mcp           the MCP server
 ```bash
 make check              # fast pre-push suite
 make test-unit          # unit, service and tool-contract tests
-make test-integration   # against real Postgres, LocalStack and MCP
+make test-integration   # against real Postgres and MCP
 make test-e2e           # Playwright, against the running stack
 make eval               # agent evaluations
 make test               # everything
@@ -431,20 +427,17 @@ make test               # everything
 
 ## Deployment
 
-Two deploys. Full guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Push to a branch and its environment deploys. Full guide:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-```bash
-# migrations first — the schema leads the code that reads it
-cd services/backend && uv run alembic upgrade head
+| Branch    | Backend                    | Web                |
+|-----------|----------------------------|--------------------|
+| `dev`     | Railway env `dev`          | Vercel preview     |
+| `staging` | Railway env `staging`      | Vercel preview     |
+| `main`    | Railway env `production`   | Vercel production  |
 
-# backend: one container
-fly deploy                                    # or push to Render
-
-# web
-pnpm --filter web exec vercel deploy --prod
-```
-
-`make deploy-help` prints the same summary.
+Railway runs `alembic upgrade head` before each deploy, so the schema always
+leads the code.
 
 There is deliberately no `make deploy` wrapper. Each of these talks to a
 different account, and a Make target that hides which one is a bad trade for
@@ -509,12 +502,13 @@ See [docs/TESTING.md](docs/TESTING.md).
 - [ADR-001 — Separate the API and agent runtime](docs/adr/ADR-001-separate-api-and-agent-runtime.md) *(superseded by ADR-009)*
 - [ADR-002 — WorkOS for B2B auth and RBAC](docs/adr/ADR-002-workos-for-b2b-auth.md)
 - [ADR-003 — MCP for reusable agent capabilities](docs/adr/ADR-003-mcp-for-agent-tools.md)
-- [ADR-004 — LocalStack, used selectively](docs/adr/ADR-004-localstack-scope.md)
+- [ADR-004 — LocalStack, used selectively](docs/adr/ADR-004-localstack-scope.md) *(default path: superseded by ADR-010)*
 - [ADR-005 — The agent emits AG-UI directly](docs/adr/ADR-005-agui-emitted-by-the-agent.md)
 - [ADR-006 — AgentCore resources are not managed by Terraform](docs/adr/ADR-006-agentcore-owns-its-own-resources.md) *(superseded by ADR-009)*
 - [ADR-007 — The planner is deterministic](docs/adr/ADR-007-deterministic-planner.md)
 - [ADR-008 — Conversation threads are not stored](docs/adr/ADR-008-conversation-threads-are-not-stored.md)
 - [ADR-009 — One backend deployable](docs/adr/ADR-009-one-backend-deployable.md)
+- [ADR-010 — Railway and Vercel, three environments](docs/adr/ADR-010-railway-and-vercel.md)
 
 ### Service guides
 
@@ -534,12 +528,11 @@ See [docs/TESTING.md](docs/TESTING.md).
 - [x] Tenant isolation enforced in the service layer and covered by tests
 - [x] FastAPI application API
 - [x] Postgres persistence with Alembic migrations
-- [x] S3 object storage with tenant-prefixed keys
 - [ ] Directory Sync / enterprise SSO (WorkOS supports it; not wired up here)
 
 ### Agent
 
-- [x] Agent on the Anthropic SDK — Claude API or Bedrock, one code path
+- [x] Agent on the Anthropic SDK against the Claude API
 - [x] Streaming AG-UI events: run lifecycle, steps, tools, state, approvals
 - [x] CopilotKit runtime with server-side identity injection
 - [x] Shared UI/agent state — the itinerary is application state, not prose
@@ -556,7 +549,6 @@ See [docs/TESTING.md](docs/TESTING.md).
 ### Engineering
 
 - [x] Docker Compose local development
-- [x] LocalStack for the AWS services it reproduces well
 - [x] Terraform for local, dev, staging and prod, with isolated state
 - [x] GitHub Actions CI/CD with OIDC, no static AWS credentials
 - [x] Unit, service, tool-contract, integration and end-to-end tests
