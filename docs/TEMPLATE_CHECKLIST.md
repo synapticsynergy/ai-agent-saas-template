@@ -42,6 +42,69 @@ build around. Replacing it means:
 What to keep: the auth layer, the permission model, the service/route split, the
 identity propagation chain, the streaming vocabulary, and the test structure.
 
+### Where the reference application actually lives
+
+About 58 files mention the evening-planning domain, so this is not a layer you
+peel off — it is most of the repository's substance. There is deliberately no
+`make new-app` that deletes it for you: the result would not compile, and a
+half-stripped repository is harder to work in than a complete example you edit
+in place. Build your domain by replacing these, one at a time, keeping the
+suite green as you go.
+
+**Replace wholesale** — nothing here survives a change of domain:
+
+```text
+packages/contracts/src/saas_contracts/plan.py     the domain types
+packages/contracts/src/saas_contracts/fixtures/   the canned dataset
+services/backend/agent_app/workflows/             scoring, planning, revision
+services/backend/mcp_server/tools/                the tools themselves
+services/backend/mcp_server/resources/            the ui:// MCP App document
+services/backend/app/models/plan.py               the tables
+services/backend/app/schemas/plan.py
+services/backend/app/services/plan_service.py
+services/backend/app/routes/plans.py
+services/backend/app/seed.py
+services/backend/alembic/versions/                start a fresh migration
+apps/web/src/components/Itinerary*.tsx            the domain UI
+apps/web/src/components/Planner*.tsx
+apps/web/src/hooks/usePlannerAgent.ts
+apps/web/src/lib/itinerary.ts
+apps/web/src/app/(map)/planner/                   the routes
+apps/web/src/app/(standard)/plans/
+evals/dataset.json                                your cases, your checks
+tests/e2e/specs/planner.spec.ts
+```
+
+**Keep as-is** — this is the actual template:
+
+```text
+services/backend/asgi.py                          the composition
+services/backend/app/auth/                        WorkOS, permissions, principals
+services/backend/app/persistence/                 engine, session, S3, Dynamo
+services/backend/app/main.py                      error mapping, correlation ids
+services/backend/agent_app/asgi.py                the AG-UI contract
+services/backend/agent_app/streaming.py           the event vocabulary
+services/backend/agent_app/tools/mcp_client.py    token forwarding
+services/backend/mcp_server/providers/            the registry pattern
+services/backend/mcp_server/context.py            identity extraction
+apps/web/src/lib/{auth,api,env}.ts                the server-only boundary
+apps/web/src/middleware.ts
+apps/web/src/app/api/copilotkit/                  identity injection
+apps/web/src/theme/                               the design system
+```
+
+**Edit, do not delete** — these mix the two, and the domain parts are obvious:
+
+```text
+services/backend/agent_app/runner.py              orchestration + intent routing
+services/backend/agent_app/interpreter.py         prompts are domain, plumbing is not
+services/backend/agent_app/narration.py
+services/backend/mcp_server/server.py             registration + tool signatures
+apps/web/src/lib/format.ts                        currency/time helpers are reusable
+apps/web/src/components/AppShell.tsx              navigation names your routes
+apps/web/src/app/page.tsx                         the landing copy
+```
+
 ## Auth
 
 - [ ] organization model
