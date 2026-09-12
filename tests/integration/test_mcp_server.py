@@ -33,32 +33,42 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="module")
 def mcp_url() -> Iterator[str]:
-    """Start the real MCP server on a free port for the duration of the module."""
+    """Serve the backend on a free port for the duration of the module.
+
+    Still a real subprocess over real HTTP, because what is under test is the
+    transport rather than the tool functions. It is the whole backend now that
+    the MCP server is mounted on it (ADR-009); before, this had to be a
+    separate project because the Strands SDK pinned `mcp<2.2` while the MCP
+    server needed `mcp>=2.2` and the two could not share an interpreter.
+    """
     port = _free_port()
     env = {
         **os.environ,
         "APP_ENV": "local",
-        "MCP_HOST": "127.0.0.1",
-        "MCP_PORT": str(port),
         "PLACES_PROVIDER": "fixture",
         "EVENTS_PROVIDER": "fixture",
+        # The transport answers 421 for any Host it was not told to expect, and
+        # the port is chosen at runtime.
+        "MCP_ALLOWED_HOSTS": f"127.0.0.1:{port},localhost:{port}",
     }
-    # The outer suite runs in the API's virtualenv; uv must not inherit it.
+    # uv resolves the project's own virtualenv; it must not inherit this one.
     env.pop("VIRTUAL_ENV", None)
 
-    # Launched through uv in the MCP server's own project: it is a separate
-    # deployable with its own dependency set (the Strands SDK pins mcp<2.2
-    # while this server needs mcp>=2.2), so it cannot share this interpreter.
+    backend = REPO_ROOT / "services" / "backend"
     process = subprocess.Popen(
         [
             "uv",
             "run",
             "--project",
-            str(REPO_ROOT / "services" / "mcp"),
-            "python",
-            "server.py",
+            str(backend),
+            "uvicorn",
+            "asgi:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
         ],
-        cwd=REPO_ROOT / "services" / "mcp",
+        cwd=backend,
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -69,7 +79,7 @@ def mcp_url() -> Iterator[str]:
     while time.monotonic() < deadline:
         if process.poll() is not None:
             output = process.stdout.read().decode() if process.stdout else ""
-            raise RuntimeError(f"MCP server exited during startup:\n{output}")
+            raise RuntimeError(f"backend exited during startup:\n{output}")
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.5):
                 break
@@ -77,7 +87,7 @@ def mcp_url() -> Iterator[str]:
             time.sleep(0.3)
     else:
         process.kill()
-        raise RuntimeError("MCP server did not start within 30s")
+        raise RuntimeError("backend did not start within 30s")
 
     try:
         yield url

@@ -23,28 +23,42 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from mcp.server.streamable_http_manager import StreamableHTTPASGIApp
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.routing import Route
 
 from agent_app.asgi import app as agent_app
 from app.main import app
 from mcp_server.config import settings as mcp_settings
 from mcp_server.server import server
 
-# The MCP app owns a session manager that is started by its own lifespan. A
-# mounted sub-application's lifespan is never run by the parent, so the parent
-# has to run it explicitly — without this, every MCP request fails with the
-# session manager reporting it was never initialised.
-# `streamable_http_path="/"` because this app is mounted, not served at the
-# root. The default is "/mcp", which under a "/mcp" mount would serve the
-# endpoint at "/mcp/mcp" — reachable, but not the URL anyone would configure.
+# The MCP server's session manager is started by the MCP app's own lifespan. A
+# sub-application's lifespan is never run by its parent, so the parent has to
+# run it explicitly — without this, every MCP request fails with the session
+# manager reporting it was never initialised.
 mcp_app = server.streamable_http_app(
-    streamable_http_path="/",
     # DNS-rebinding protection stays on; the deployment names its own hostname.
-    # Left at the default (an empty allow-list) every request is answered 421.
+    # With the default empty allow-list, every request is answered 421.
     transport_security=TransportSecuritySettings(allowed_hosts=mcp_settings.allowed_hosts),
 )
 
-app.mount("/mcp", mcp_app)
+# Registered as a plain route rather than `app.mount("/mcp", mcp_app)`, because
+# a Starlette mount redirects the bare "/mcp" to "/mcp/" with a 307. That is
+# the exact URL people paste into an MCP client config, and a redirect there is
+# at best untidy and at worst unfollowed. The MCP SDK registers its own ASGI
+# app the same way — around the same session manager — so this mirrors it
+# rather than working around it.
+#
+# It is easy to miss: TestClient follows redirects by default, so this looked
+# correct under test and only showed up against a real HTTP client.
+app.router.routes.append(
+    Route(
+        "/mcp",
+        endpoint=StreamableHTTPASGIApp(server.session_manager),
+        methods=["GET", "POST", "DELETE"],
+    )
+)
+
 app.mount("/agent", agent_app)
 
 _api_lifespan = app.router.lifespan_context
