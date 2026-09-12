@@ -110,29 +110,8 @@ jobs:
           fi
 
   # -------------------------------------------------------------------------
-  terraform:
-    name: Terraform (fmt, validate)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.14.5"
-
-      - run: terraform fmt -check -recursive advanced/infra/terraform
-
-      - name: Validate every environment
-        run: |
-          for env in local dev staging prod; do
-            echo "==> $env"
-            terraform -chdir=advanced/infra/terraform/envs/$env init -backend=false -input=false
-            terraform -chdir=advanced/infra/terraform/envs/$env validate
-          done
-
-  # -------------------------------------------------------------------------
   integration:
-    name: Integration (Postgres + LocalStack + MCP)
+    name: Integration (Postgres + MCP)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -148,26 +127,9 @@ jobs:
           --health-timeout 5s
           --health-retries 20
 
-      localstack:
-        image: localstack/localstack:4
-        env:
-          SERVICES: s3,dynamodb
-        ports: ["4566:4566"]
-        options: >-
-          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
-
     env:
       APP_ENV: local
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
-      DATABASE_SYNC_URL: postgresql+psycopg://postgres:postgres@localhost:5432/app
-      AWS_REGION: us-west-2
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_ENDPOINT_URL: http://localhost:4566
-      S3_BUCKET: ai-agent-saas-ci
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
 
     steps:
       - uses: actions/checkout@v6
@@ -235,8 +197,7 @@ jobs:
       AUTH_DEV_FIXTURE_ROLE: member
       AGENT_MODEL_PROVIDER: scripted
       COPILOTKIT_TELEMETRY_DISABLED: "true"
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app
-      DATABASE_SYNC_URL: postgresql+psycopg://postgres:postgres@localhost:5432/app
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
       API_BASE_URL: http://localhost:8000
       AGENT_BASE_URL: http://localhost:8000/agent
       MCP_SERVER_URL: http://localhost:8000/mcp
