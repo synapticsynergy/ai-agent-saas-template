@@ -6,7 +6,6 @@ from fastapi import APIRouter, Response, status
 
 from app.config import settings
 from app.persistence.postgres import check_database
-from app.persistence.s3 import check_storage
 from app.schemas.common import HealthResponse
 from app.version import VERSION
 
@@ -26,7 +25,7 @@ async def ready(response: Response) -> HealthResponse:
     Returns 503 when a dependency is down so a load balancer or deploy gate can
     act on it, while still returning the per-check detail in the body.
     """
-    checks = {"database": await check_database(), "storage": check_storage()}
+    checks = {"database": await check_database()}
     healthy = all(checks.values())
 
     if not healthy:

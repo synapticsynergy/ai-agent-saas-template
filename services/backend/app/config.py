@@ -55,12 +55,6 @@ class Settings(BaseSettings):
     auth_dev_fixture_email: str = "demo@example.com"
     auth_dev_fixture_role: str = "member"
 
-    aws_region: str = "us-west-2"
-    aws_endpoint_url: str = ""
-    s3_bucket: str = "ai-agent-saas-local"
-    dynamodb_enabled: bool = False
-    dynamodb_table: str = "ai-agent-saas-local"
-
     provider_timeout_seconds: float = 8.0
 
     @property
@@ -88,11 +82,6 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         return self.app_env == "local"
 
-    @property
-    def aws_endpoint(self) -> str | None:
-        """LocalStack endpoint override, or None to use real AWS endpoints."""
-        return self.aws_endpoint_url or None
-
     @model_validator(mode="after")
     def _validate_environment(self) -> Settings:
         if self.auth_dev_fixture and self.app_env != "local":
@@ -116,12 +105,6 @@ class Settings(BaseSettings):
                     f"APP_ENV={self.app_env} requires these variables to be set: "
                     + ", ".join(missing)
                 )
-            if self.aws_endpoint_url:
-                raise ValueError(
-                    "AWS_ENDPOINT_URL points the AWS SDK at a local emulator and "
-                    f"must be empty when APP_ENV={self.app_env}."
-                )
-
         return self
 
 

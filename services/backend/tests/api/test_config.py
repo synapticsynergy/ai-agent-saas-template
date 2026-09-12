@@ -26,7 +26,6 @@ def _settings(**overrides: object) -> Settings:
         "auth_dev_fixture": False,
         "workos_api_key": "",
         "workos_client_id": "",
-        "aws_endpoint_url": "",
         "api_cors_origins": "http://localhost:3000",
     }
     base.update(overrides)
@@ -53,19 +52,10 @@ class TestDeployedEnvironmentGuards:
         with pytest.raises(ValidationError, match="WORKOS_API_KEY"):
             _settings(app_env="staging")
 
-    def test_localstack_endpoint_is_refused_outside_local(self) -> None:
-        with pytest.raises(ValidationError, match="AWS_ENDPOINT_URL"):
-            _settings(
-                app_env="prod",
-                workos_api_key="k",
-                workos_client_id="c",
-                aws_endpoint_url="http://localhost:4566",
-            )
-
     def test_a_fully_configured_deployed_environment_is_valid(self) -> None:
         settings = _settings(app_env="prod", workos_api_key="k", workos_client_id="c")
         assert settings.is_local is False
-        assert settings.aws_endpoint is None
+        assert not hasattr(settings, "aws_endpoint")
 
 
 class TestDerivedValues:

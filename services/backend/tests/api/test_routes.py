@@ -15,6 +15,11 @@ class TestHealth:
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
+    async def test_readiness_reports_only_the_database(self, client_factory: Any) -> None:
+        async with client_factory(None) as client:
+            response = await client.get("/health/ready")
+        assert set(response.json()["checks"]) == {"database"}
+
 
 class TestAuthentication:
     async def test_unauthenticated_plan_list_is_401(self, client_factory: Any) -> None:
